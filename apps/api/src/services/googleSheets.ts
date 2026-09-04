@@ -30,7 +30,7 @@ export const getBirthdaysForNextWeek = async (): Promise<{ membros: BirthdayPers
 
   const nextSunday = new Date();
   nextSunday.setDate(nextSunday.getDate() + ((7 - nextSunday.getDay()) % 7));
-  
+
   const targetDates: string[] = [];
   for (let i = 0; i < 7; i++) {
     const d = new Date(nextSunday);
@@ -56,7 +56,7 @@ export const getBirthdaysForNextWeek = async (): Promise<{ membros: BirthdayPers
 
     const processMembroRow = (row: any[]) => {
       const name = row[0] as string;
-      const dateStr = row[1] as string; 
+      const dateStr = row[1] as string;
       if (!name || !dateStr) return null;
 
       const parts = dateStr.split('/');
@@ -70,9 +70,9 @@ export const getBirthdaysForNextWeek = async (): Promise<{ membros: BirthdayPers
     };
 
     const processDependenteRow = (row: any[]) => {
-      const name = row[0] as string;
-      const dateStr = row[1] as string;
-      const responsavel = row[2] as string;
+      const responsavel = row[0] as string; // Coluna A: Nome do Responsável (Membro)
+      const dateStr = row[1] as string;     // Coluna B: Data
+      const name = row[2] as string;        // Coluna C: Nome do Dependente (Aniversariante)
       if (!name || !dateStr) return null;
 
       const parts = dateStr.split('/');
