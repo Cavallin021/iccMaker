@@ -25,9 +25,8 @@ export const createSelection = async (req: Request, res: Response): Promise<void
 
 export const getPendingSelections = async (req: Request, res: Response): Promise<void> => {
   try {
-    // Busca seleções pendentes e popula os dados das opções se necessário
-    // Aqui assumimos que Option id e o song id sejam os mesmos, mas o model só guarda string.
-    const selections = await Selection.find({ status: 'pending' }).sort({ createdAt: -1 });
+    // Busca todas as seleções (não apenas as pendentes)
+    const selections = await Selection.find({}).sort({ createdAt: -1 });
     res.json(selections);
   } catch (error: any) {
     res.status(500).json({ message: 'Erro ao buscar seleções', error: error.message });

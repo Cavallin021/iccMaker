@@ -160,22 +160,35 @@ export function Studio() {
             <>
               <h1 style={{ fontSize: '2rem', marginBottom: '1rem' }}>Seleções Recebidas</h1>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-                {pendingSelections.map(sel => (
-                  <div key={sel._id} className="glass-panel" style={{ padding: '1.5rem' }}>
-                    <h3 style={{ fontSize: '1.25rem', marginBottom: '0.5rem' }}>Seleção de {new Date(sel.createdAt).toLocaleDateString()}</h3>
-                    <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)', marginBottom: '1rem' }}>
-                      {new Date(sel.createdAt).toLocaleTimeString()}
-                    </p>
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                      <button className="btn btn-primary" onClick={() => setActiveSelection(sel)} style={{ flex: 1, padding: '0.5rem' }}>
-                        Abrir para Edição
-                      </button>
-                      <button onClick={() => handleDeleteSelection(sel._id)} style={{ padding: '0.5rem', background: 'transparent', border: '1px solid #ef4444', color: '#ef4444', borderRadius: '0.5rem', cursor: 'pointer' }} title="Deletar Seleção">
-                        🗑️
-                      </button>
+                {pendingSelections.map(sel => {
+                  const getNextSunday = (dateString: string) => {
+                    const d = new Date(dateString);
+                    d.setDate(d.getDate() + ((7 - d.getDay()) % 7));
+                    return `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`;
+                  };
+
+                  return (
+                    <div key={sel._id} className="glass-panel" style={{ padding: '1.5rem', position: 'relative' }}>
+                      {sel.status === 'processed' && (
+                        <div style={{ position: 'absolute', top: '-0.5rem', right: '-0.5rem', background: '#22c55e', color: 'white', padding: '0.25rem 0.5rem', borderRadius: '0.5rem', fontSize: '0.75rem', fontWeight: 'bold', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>
+                          ✅ Já Enviado
+                        </div>
+                      )}
+                      <h3 style={{ fontSize: '1.25rem', marginBottom: '0.5rem', color: 'var(--color-primary)' }}>Domingo, {getNextSunday(sel.createdAt)}</h3>
+                      <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)', marginBottom: '1rem' }}>
+                        Criada em: {new Date(sel.createdAt).toLocaleDateString()} às {new Date(sel.createdAt).toLocaleTimeString()}
+                      </p>
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <button className="btn btn-primary" onClick={() => setActiveSelection(sel)} style={{ flex: 1, padding: '0.5rem' }}>
+                          Abrir para Edição
+                        </button>
+                        <button onClick={() => handleDeleteSelection(sel._id)} style={{ padding: '0.5rem', background: 'transparent', border: '1px solid #ef4444', color: '#ef4444', borderRadius: '0.5rem', cursor: 'pointer' }} title="Deletar Seleção">
+                          🗑️
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </>
           )}
