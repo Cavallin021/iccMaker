@@ -432,9 +432,9 @@ export function Studio() {
                     <div style={{ background: '#000', borderRadius: '0.5rem', overflow: 'hidden', border: '1px dashed var(--color-border)', position: 'relative' }}>
                       <img src={`${BASE_URL}/template/static_6.jpg`} alt="Estático 6" style={{ width: '100%', display: 'block', opacity: 0.7 }} />
                       {(preachTheme || preachTitle) && (
-                        <div style={{ position: 'absolute', top: '35%', left: '7.5%', width: '47.5%', display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                          <span style={{ color: '#FFFF00', fontWeight: 'bold' }}>{preachTheme}</span>
-                          <span style={{ color: '#FFFF00', fontWeight: 'bold' }}>{preachTitle}</span>
+                        <div style={{ position: 'absolute', top: '35%', left: '7.5%', width: '47.5%', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                          <span style={{ color: '#FFFF00', fontWeight: 'bold', fontSize: '0.65rem', lineHeight: '1.2' }}>{preachTheme}</span>
+                          <span style={{ color: '#FFFF00', fontWeight: 'bold', fontSize: '0.85rem', lineHeight: '1.2' }}>{preachTitle}</span>
                         </div>
                       )}
                     </div>
