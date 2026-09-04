@@ -1,0 +1,37 @@
+{
+  "name": "api",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "nodemon --watch 'src/**/*.ts' --exec 'ts-node' src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "seed": "ts-node src/seed.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "googleapis": "^178.0.0",
+    "mongoose": "^9.9.4",
+    "multer": "^2.2.0",
+    "pdfkit": "^0.20.1",
+    "pptxgenjs": "^4.0.1",
+    "resend": "^6.25.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/multer": "^2.2.0",
+    "@types/node": "^24.13.3",
+    "@types/pdfkit": "^0.17.6",
+    "nodemon": "^3.1.14",
+    "ts-node": "^10.9.2",
+    "typescript": "^6.0.3"
+  }
+}
