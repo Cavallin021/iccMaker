@@ -62,7 +62,7 @@ export const AvisosManager: React.FC = () => {
       setFiles([]);
       setDuration(10);
 
-      await fetchNotices();
+      await fetchNotices(false);
     } catch (err: any) {
       alert('Erro ao enviar imagem: ' + err.message);
     } finally {
@@ -74,7 +74,7 @@ export const AvisosManager: React.FC = () => {
     if (!window.confirm('Tem certeza que deseja apagar este aviso?')) return;
     try {
       await deleteNotice(id);
-      await fetchNotices();
+      await fetchNotices(false);
     } catch (err: any) {
       alert('Erro ao apagar: ' + err.message);
     }
@@ -83,7 +83,7 @@ export const AvisosManager: React.FC = () => {
   const handleToggleActive = async (id: string, currentStatus: boolean) => {
     try {
       await updateNotice(id, { isActive: !currentStatus });
-      await fetchNotices();
+      await fetchNotices(false);
     } catch (err: any) {
       alert('Erro ao atualizar: ' + err.message);
     }
@@ -116,10 +116,10 @@ export const AvisosManager: React.FC = () => {
         return Promise.resolve();
       });
       await Promise.all(updatePromises);
-      await fetchNotices();
+      await fetchNotices(false);
     } catch (err: any) {
       alert('Erro ao reordenar: ' + err.message);
-      await fetchNotices();
+      await fetchNotices(false);
     }
   };
 
