@@ -3,15 +3,13 @@ import {
   getNotices,
   createNotice,
   updateNotice,
-  deleteNotice,
-  generateNoticeVideo
+  deleteNotice
 } from '../services/api';
 import type { Notice } from '../services/api';
 
 export const AvisosManager: React.FC = () => {
   const [notices, setNotices] = useState<Notice[]>([]);
   const [loading, setLoading] = useState(true);
-  const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // States for new notice
@@ -125,37 +123,9 @@ export const AvisosManager: React.FC = () => {
     }
   };
 
-  const handleGenerateVideo = async () => {
-    try {
-      setGenerating(true);
-      const url = await generateNoticeVideo();
-
-      // Criar link para download automático
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
-      // The videoUrl is relative like /avisos/avisos.mp4
-      // We need to resolve it relative to the API host.
-      const baseUrl = API_URL.replace('/api', '');
-      const fullUrl = `${baseUrl}${url}?v=${Date.now()}`;
-
-      const link = document.createElement('a');
-      link.href = fullUrl;
-      link.download = `Avisos-${new Date().toISOString().split('T')[0]}.mp4`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-
-    } catch (err: any) {
-      alert('Erro ao gerar vídeo: ' + err.message);
-    } finally {
-      setGenerating(false);
-    }
-  };
-
   return (
     <div style={{ padding: '1.5rem', background: 'rgba(255, 255, 255, 0.03)', borderRadius: '0.5rem', border: '1px solid var(--color-border)' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-        <h2 style={{ fontSize: '1.25rem', margin: 0 }}>Gerador de Vídeo de Avisos</h2>
-      </div>
+      <h2 style={{ fontSize: '1.25rem', marginBottom: '1.5rem' }}>Gerenciador de Avisos</h2>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-start">
 

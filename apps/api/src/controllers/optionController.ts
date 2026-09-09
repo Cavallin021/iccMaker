@@ -100,7 +100,6 @@ export const generatePresentation = async (req: Request, res: Response) => {
     const extraImages = req.files as Express.Multer.File[] | undefined;
     const preachTheme = req.body.preachTheme || '';
     const preachTitle = req.body.preachTitle || '';
-    const downloadFormat = req.body.downloadFormat === 'pptx' ? 'pptx' : 'pdf';
 
     // Utiliza o Service recém-criado para montar a apresentação
     const { pdfBuffer, pptxBuffer, fileNameBase } = await buildPresentationFiles(

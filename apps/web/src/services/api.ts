@@ -36,8 +36,7 @@ export const generatePresentation = async (
   extraImages: File[] = [],
   preachTheme: string = '',
   preachTitle: string = '',
-  includeBirthdays: boolean = false,
-  downloadFormat: 'pdf' | 'pptx' = 'pdf'
+  includeBirthdays: boolean = false
 ): Promise<{ status: string; fileNameBase: string }> => {
   const password = sessionStorage.getItem('studio_password') || '';
   
@@ -46,7 +45,6 @@ export const generatePresentation = async (
   formData.append('preachTheme', preachTheme);
   formData.append('preachTitle', preachTitle);
   formData.append('includeBirthdays', String(includeBirthdays));
-  formData.append('downloadFormat', downloadFormat);
 
   extraImages.forEach((file) => {
     formData.append('extraImages', file);
