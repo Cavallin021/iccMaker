@@ -36,7 +36,7 @@ export const getPendingSelections = async (req: Request, res: Response): Promise
 export const markAsProcessed = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const selection = await Selection.findByIdAndUpdate(id, { status: 'processed' }, { new: true });
+    const selection = await Selection.findByIdAndUpdate(id, { status: 'processed' }, { returnDocument: 'after' });
     
     if (!selection) {
       res.status(404).json({ message: 'Seleção não encontrada.' });
