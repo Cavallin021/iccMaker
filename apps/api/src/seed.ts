@@ -23,6 +23,20 @@ const seedOptions = async () => {
       .filter(dirent => dirent.isDirectory())
       .map(dirent => dirent.name);
 
+    // Extract PDF text for lyrics
+    const pdfPath = path.resolve(__dirname, '../../../LOUVORES DA CAPITAL 2025.pdf');
+    let pdfText = '';
+    if (fs.existsSync(pdfPath)) {
+      const { PDFParse } = require('pdf-parse');
+      const dataBuffer = fs.readFileSync(pdfPath);
+      const parser = new PDFParse({ data: dataBuffer });
+      const data = await parser.getText();
+      // Remove page numbers e.g. "-- 14 of 56 --"
+      pdfText = data.text.replace(/\n-- \d+ of \d+ --\n/g, '\n');
+    } else {
+      console.warn('PDF não encontrado, cânticos ficarão sem letra.');
+    }
+
     const optionsToInsert = [];
 
     for (const folderName of folders) {
@@ -33,13 +47,33 @@ const seedOptions = async () => {
         return ext === '.jpg' || ext === '.jpeg' || ext === '.png';
       }).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 
+      // Tentar encontrar a letra no PDF. O formato no PDF é tipo "1 GLÓRIA PRA SEMPRE\nLetra..."
+      let lyrics = '';
+      if (pdfText) {
+        // Título vem no formato "001-Glória Pra Sempre"
+        const match = folderName.match(/^(\d+)-(.*)$/);
+        if (match) {
+          const number = parseInt(match[1], 10);
+          
+          // Regex para encontrar o cântico e capturar tudo até o próximo número de cântico
+          // Exemplo: "\n1 GLÓRIA PRA SEMPRE\n...letra...\n2 MADEIRO LAVRADO\n"
+          const regex = new RegExp(`\\n${number}\\s+[^\\n]+\\n([\\s\\S]*?)(?=\\n\\d+\\s+[^\\n]+|$)`, 'i');
+          const textMatch = pdfText.match(regex);
+          if (textMatch) {
+            // Remove multiple newlines at the end
+            lyrics = textMatch[1].trim();
+          }
+        }
+      }
+
       optionsToInsert.push({
         title: folderName,
         category: 'Cânticos',
         slidesCount: images.length,
         filePath: `../canticos/${folderName}`, // Caminho relativo a apps/api/
         originalFileName: `Pasta: ${folderName}`,
-        images: images
+        images: images,
+        lyrics: lyrics
       });
     }
 

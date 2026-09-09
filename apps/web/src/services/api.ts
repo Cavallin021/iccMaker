@@ -8,6 +8,7 @@ export interface Option {
   filePath: string;
   originalFileName: string;
   images: string[];
+  lyrics?: string;
   createdAt: string;
 }
 

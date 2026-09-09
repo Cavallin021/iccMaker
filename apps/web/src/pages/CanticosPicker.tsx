@@ -7,7 +7,7 @@ const BASE_URL = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.rep
 
 export function CanticosPicker() {
   const [options, setOptions] = useState<Option[]>([]);
-  const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
+  const [selectedOptions, setSelectedOptions] = useState<(string | null)[]>(Array(7).fill(null));
   const [searchTerm, setSearchTerm] = useState('');
 
   const [isAuthenticated, setIsAuthenticated] = useState(!!sessionStorage.getItem('canticos_password'));
@@ -37,25 +37,33 @@ export function CanticosPicker() {
 
   const toggleOption = (id: string) => {
     setSelectedOptions(prev => {
-      if (prev.includes(id)) {
-        return prev.filter(opt => opt !== id);
+      const newSelections = [...prev];
+      const index = newSelections.indexOf(id);
+      if (index !== -1) {
+        // Remover deixando a vaga em aberto
+        newSelections[index] = null;
+        return newSelections;
       } else {
-        if (prev.length >= 7) {
+        // Adicionar na primeira vaga em aberto
+        const emptyIndex = newSelections.indexOf(null);
+        if (emptyIndex === -1) {
           alert('Você já selecionou 7 cânticos.');
           return prev;
         }
-        return [...prev, id];
+        newSelections[emptyIndex] = id;
+        return newSelections;
       }
     });
   };
 
   const handleSend = async () => {
-    if (selectedOptions.length !== 7) return;
+    const filledOptions = selectedOptions.filter(Boolean) as string[];
+    if (filledOptions.length !== 7) return;
     try {
       setIsSending(true);
-      await createSelection(selectedOptions);
+      await createSelection(filledOptions);
       alert('Cânticos enviados para o estúdio com sucesso!');
-      setSelectedOptions([]);
+      setSelectedOptions(Array(7).fill(null));
       sessionStorage.removeItem('canticos_password');
       setIsAuthenticated(false);
     } catch (error: any) {
@@ -68,7 +76,7 @@ export function CanticosPicker() {
   const handleLogout = () => {
     sessionStorage.removeItem('canticos_password');
     setIsAuthenticated(false);
-    setSelectedOptions([]);
+    setSelectedOptions(Array(7).fill(null));
   };
 
   if (!isAuthenticated) {
@@ -91,9 +99,18 @@ export function CanticosPicker() {
     );
   }
 
-  const selectedOptionsData = selectedOptions.map(id => options.find(opt => opt._id === id)).filter(Boolean) as Option[];
+  const normalizeText = (text: string) => {
+    return text ? text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() : '';
+  };
+
   const filteredOptions = [...options]
-    .filter(opt => opt.title.toLowerCase().includes(searchTerm.toLowerCase()))
+    .filter(opt => {
+      const search = normalizeText(searchTerm);
+      if (!search) return true;
+      const titleMatch = normalizeText(opt.title).includes(search);
+      const lyricsMatch = normalizeText(opt.lyrics || '').includes(search);
+      return titleMatch || lyricsMatch;
+    })
     .sort((a, b) => a.title.localeCompare(b.title, undefined, { numeric: true }));
 
   return (
@@ -113,11 +130,11 @@ export function CanticosPicker() {
               Sair
             </button>
             <button
-              className={selectedOptions.length === 7 ? 'btn btn-primary btn-sm-text' : 'btn btn-disabled btn-sm-text'}
-              disabled={selectedOptions.length !== 7 || isSending}
+              className={selectedOptions.filter(Boolean).length === 7 ? 'btn btn-primary btn-sm-text' : 'btn btn-disabled btn-sm-text'}
+              disabled={selectedOptions.filter(Boolean).length !== 7 || isSending}
               onClick={handleSend}
             >
-              {isSending ? 'Enviando...' : `Enviar para o Estúdio (${selectedOptions.length}/7)`}
+              {isSending ? 'Enviando...' : `Enviar para o Estúdio (${selectedOptions.filter(Boolean).length}/7)`}
             </button>
           </div>
         </div>
@@ -137,7 +154,7 @@ export function CanticosPicker() {
           <div style={{ marginBottom: '2rem' }}>
             <input
               type="text"
-              placeholder="Pesquisar cântico pelo nome ou número..."
+              placeholder="Pesquisar cântico pelo nome, número ou trecho da letra..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               style={{
@@ -203,12 +220,12 @@ export function CanticosPicker() {
         }}>
           <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--color-border)' }}>
             <h2 style={{ fontSize: '1.25rem', margin: 0 }}>Preview</h2>
-            <p style={{ fontSize: '0.875rem', margin: '0.5rem 0 0 0' }}>Ordem dos {selectedOptions.length}/7 cânticos selecionados</p>
+            <p style={{ fontSize: '0.875rem', margin: '0.5rem 0 0 0' }}>Ordem dos {selectedOptions.filter(Boolean).length}/7 cânticos selecionados</p>
           </div>
 
           <div className="sidebar-scroll" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            {Array.from({ length: 7 }).map((_, index) => {
-              const opt = selectedOptionsData[index];
+            {selectedOptions.map((optId, index) => {
+              const opt = optId ? options.find(o => o._id === optId) : null;
               if (!opt) {
                 return (
                   <div key={index} style={{ padding: '1rem', border: '2px dashed var(--color-border)', borderRadius: '0.5rem', textAlign: 'center', color: 'var(--color-text-muted)' }}>
@@ -218,8 +235,21 @@ export function CanticosPicker() {
               }
               const { name } = formatTitle(opt.title);
               return (
-                <div key={index} style={{ paddingLeft: '1rem', borderLeft: '3px solid var(--color-primary)' }}>
-                  <h4 style={{ fontSize: '1rem', color: 'var(--color-primary)', marginBottom: '1rem' }}>{index + 1}. {name}</h4>
+                <div key={index} style={{ paddingLeft: '1rem', borderLeft: '3px solid var(--color-primary)', position: 'relative' }}>
+                  <button
+                    onClick={() => toggleOption(opt._id)}
+                    title="Remover"
+                    style={{ position: 'absolute', right: 0, top: 0, background: 'transparent', border: 'none', color: '#ef4444', padding: 0, cursor: 'pointer', opacity: 0.7, transition: 'all 0.2s ease', display: 'flex' }}
+                    onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+                    onMouseLeave={(e) => e.currentTarget.style.opacity = '0.7'}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <line x1="15" y1="9" x2="9" y2="15"></line>
+                      <line x1="9" y1="9" x2="15" y2="15"></line>
+                    </svg>
+                  </button>
+                  <h4 style={{ fontSize: '1rem', color: 'var(--color-primary)', marginBottom: '1rem', paddingRight: '4rem' }}>{index + 1}. {name}</h4>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                     {opt.images.map((img, imgIndex) => {
                       const folderName = opt.filePath.split('/').pop();

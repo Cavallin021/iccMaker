@@ -7,6 +7,7 @@ export interface IOption extends Document {
   filePath: string;
   originalFileName: string;
   images: string[];
+  lyrics?: string;
   createdAt: Date;
 }
 
@@ -17,6 +18,7 @@ const OptionSchema: Schema = new Schema({
   filePath: { type: String, required: true },
   originalFileName: { type: String, required: true },
   images: [{ type: String }],
+  lyrics: { type: String },
   createdAt: { type: Date, default: Date.now }
 });
 
