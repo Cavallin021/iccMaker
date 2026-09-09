@@ -5,6 +5,29 @@ import path from 'path';
 import { sendPresentationEmail } from '../services/emailService';
 import { getBirthdaysForNextWeek } from '../services/googleSheets';
 import { buildPresentationFiles } from '../services/presentationService';
+import { buildVideoBuffer } from './noticeController';
+
+const tempDir = path.join(__dirname, '../../temp');
+if (!fs.existsSync(tempDir)) {
+  fs.mkdirSync(tempDir, { recursive: true });
+}
+
+// Limpa arquivos com mais de 1 hora na pasta temp
+const cleanupTempFiles = () => {
+  if (!fs.existsSync(tempDir)) return;
+  const now = Date.now();
+  fs.readdirSync(tempDir).forEach(file => {
+    const filePath = path.join(tempDir, file);
+    try {
+      const stats = fs.statSync(filePath);
+      if (now - stats.mtimeMs > 3600000) { // 1 hora
+        fs.unlinkSync(filePath);
+      }
+    } catch (e) {
+      console.error(`Erro ao limpar ${file}:`, e);
+    }
+  });
+};
 
 export const getOptions = async (req: Request, res: Response) => {
   try {
@@ -77,6 +100,7 @@ export const generatePresentation = async (req: Request, res: Response) => {
     const extraImages = req.files as Express.Multer.File[] | undefined;
     const preachTheme = req.body.preachTheme || '';
     const preachTitle = req.body.preachTitle || '';
+    const downloadFormat = req.body.downloadFormat === 'pptx' ? 'pptx' : 'pdf';
 
     // Utiliza o Service recém-criado para montar a apresentação
     const { pdfBuffer, pptxBuffer, fileNameBase } = await buildPresentationFiles(
@@ -86,12 +110,21 @@ export const generatePresentation = async (req: Request, res: Response) => {
       preachTitle
     );
 
+    // Tenta gerar o vídeo dos avisos, se houver falha não impede o envio do PPTX
+    let videoBuffer: Buffer | null = null;
+    try {
+      videoBuffer = await buildVideoBuffer();
+    } catch (err: any) {
+      console.error('Erro ao gerar vídeo dos avisos durante a apresentação:', err.message);
+    }
+
     let emailStatus = 'disabled';
 
     // Dispara o envio de e-mail e aguarda (Síncrono)
     if (process.env.RESEND_API_KEY && process.env.DESTINATION_EMAIL) {
       try {
-        await sendPresentationEmail(pptxBuffer, `${fileNameBase}.pptx`);
+        const videoName = fileNameBase.replace('Culto-', 'Avisos-') + '.mp4';
+        await sendPresentationEmail(pptxBuffer, `${fileNameBase}.pptx`, videoBuffer, videoBuffer ? videoName : undefined);
         emailStatus = 'success';
       } catch (err: any) {
         console.error('Erro ao enviar e-mail:', err.message);
@@ -99,14 +132,20 @@ export const generatePresentation = async (req: Request, res: Response) => {
       }
     }
 
-    res.writeHead(200, {
-      'Content-Disposition': `attachment; filename="${fileNameBase}.pdf"`,
-      'Content-Type': 'application/pdf',
-      'X-Email-Status': emailStatus,
-      'Access-Control-Expose-Headers': 'X-Email-Status'
-    });
+    // Limpar temps antigos
+    cleanupTempFiles();
 
-    res.end(pdfBuffer);
+    // Salvar novos buffers em disco
+    const pdfPath = path.join(tempDir, `${fileNameBase}.pdf`);
+    const pptxPath = path.join(tempDir, `${fileNameBase}.pptx`);
+    fs.writeFileSync(pdfPath, pdfBuffer);
+    fs.writeFileSync(pptxPath, pptxBuffer);
+
+    res.status(200).json({
+      message: 'Apresentação gerada com sucesso!',
+      fileNameBase,
+      emailStatus
+    });
 
     // Limpeza dos arquivos temporários extras do disco
     if (extraImages && extraImages.length > 0) {
@@ -120,5 +159,20 @@ export const generatePresentation = async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error(error);
     res.status(500).json({ message: 'Erro ao gerar apresentação', error: error.message });
+  }
+};
+
+export const downloadGeneratedFile = (req: Request, res: Response) => {
+  try {
+    const filename = req.params.filename as string;
+    const filePath = path.join(tempDir, filename);
+
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ message: 'Arquivo não encontrado ou já expirou.' });
+    }
+
+    res.download(filePath);
+  } catch (error: any) {
+    res.status(500).json({ message: 'Erro ao fazer o download', error: error.message });
   }
 };

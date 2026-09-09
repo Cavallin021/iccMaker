@@ -1,11 +1,12 @@
 import { Request, Response } from 'express';
 import Selection from '../models/Selection';
 import Option from '../models/Option';
+import { sendTelegramNotification } from '../services/telegramService';
 
 export const createSelection = async (req: Request, res: Response): Promise<void> => {
   try {
     const { songs } = req.body;
-    
+
     if (!songs || !Array.isArray(songs) || songs.length === 0) {
       res.status(400).json({ message: 'Lista de cânticos inválida.' });
       return;
@@ -16,6 +17,20 @@ export const createSelection = async (req: Request, res: Response): Promise<void
     });
 
     await newSelection.save();
+
+    const getNextSunday = () => {
+      const d = new Date();
+      d.setDate(d.getDate() + ((7 - d.getDay()) % 7));
+      const day = String(d.getDate()).padStart(2, '0');
+      const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+      const month = meses[d.getMonth()];
+      const year = d.getFullYear();
+      return `${day} de ${month} de ${year}`;
+    };
+
+    // Enviar notificação para o celular via Telegram
+    const msg = `🔔 *Nova Seleção de Cânticos!*\n\nA equipe enviou uma nova lista para o culto.\nAcesse o Estúdio para gerar a apresentação de *${getNextSunday()}*.`;
+    await sendTelegramNotification(msg);
 
     res.status(201).json({ message: 'Seleção enviada com sucesso!', selection: newSelection });
   } catch (error: any) {
@@ -37,7 +52,7 @@ export const markAsProcessed = async (req: Request, res: Response): Promise<void
   try {
     const { id } = req.params;
     const selection = await Selection.findByIdAndUpdate(id, { status: 'processed' }, { returnDocument: 'after' });
-    
+
     if (!selection) {
       res.status(404).json({ message: 'Seleção não encontrada.' });
       return;
@@ -53,7 +68,7 @@ export const deleteSelection = async (req: Request, res: Response): Promise<void
   try {
     const { id } = req.params;
     const selection = await Selection.findByIdAndDelete(id);
-    
+
     if (!selection) {
       res.status(404).json({ message: 'Seleção não encontrada.' });
       return;

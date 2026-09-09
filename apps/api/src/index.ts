@@ -26,6 +26,7 @@ const connectDB = async () => {
 
 import optionRoutes from './routes/optionRoutes';
 import selectionRoutes from './routes/selectionRoutes';
+import noticeRoutes from './routes/noticeRoutes';
 import path from 'path';
 
 app.get('/api/health', (req, res) => {
@@ -37,6 +38,9 @@ app.use('/static', express.static(path.join(__dirname, '../../canticos')));
 
 // Servir as imagens fixas do molde da apresentação
 app.use('/template', express.static(path.join(__dirname, '../public/template')));
+
+// Servir imagens e vídeos de avisos
+app.use('/avisos', express.static(path.join(__dirname, '../../avisos')));
 
 app.post('/api/auth/verify', (req, res) => {
   const { password, role } = req.body;
@@ -50,6 +54,7 @@ app.post('/api/auth/verify', (req, res) => {
 });
 app.use('/api/options', optionRoutes);
 app.use('/api/selections', selectionRoutes);
+app.use('/api/notices', noticeRoutes);
 
 connectDB().then(() => {
   app.listen(PORT, () => {

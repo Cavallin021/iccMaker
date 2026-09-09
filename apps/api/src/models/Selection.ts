@@ -19,6 +19,7 @@ const SelectionSchema: Schema = new Schema({
   createdAt: {
     type: Date,
     default: Date.now,
+    expires: '5d' // O MongoDB apagará o documento 5 dias após a criação
   },
 });
 

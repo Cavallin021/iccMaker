@@ -31,7 +31,14 @@ export const createOption = async (formData: FormData): Promise<Option> => {
   return response.json();
 };
 
-export const generatePresentation = async (optionIds: string[], extraImages: File[] = [], preachTheme: string = '', preachTitle: string = '', includeBirthdays: boolean = false): Promise<string> => {
+export const generatePresentation = async (
+  optionIds: string[],
+  extraImages: File[] = [],
+  preachTheme: string = '',
+  preachTitle: string = '',
+  includeBirthdays: boolean = false,
+  downloadFormat: 'pdf' | 'pptx' = 'pdf'
+): Promise<{ status: string; fileNameBase: string }> => {
   const password = sessionStorage.getItem('studio_password') || '';
   
   const formData = new FormData();
@@ -39,6 +46,7 @@ export const generatePresentation = async (optionIds: string[], extraImages: Fil
   formData.append('preachTheme', preachTheme);
   formData.append('preachTitle', preachTitle);
   formData.append('includeBirthdays', String(includeBirthdays));
+  formData.append('downloadFormat', downloadFormat);
 
   extraImages.forEach((file) => {
     formData.append('extraImages', file);
@@ -57,31 +65,8 @@ export const generatePresentation = async (optionIds: string[], extraImages: Fil
     throw new Error(errorData.message || 'Erro ao gerar apresentação');
   }
 
-  // Faz o download do arquivo retornado
-  const blob = await response.blob();
-  // Helper para formatar a data (ddMmmYY) ex: 30Ago26
-  const getNextSunday = () => {
-    const d = new Date();
-    d.setDate(d.getDate() + ((7 - d.getDay()) % 7));
-    const day = String(d.getDate()).padStart(2, '0');
-    const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-    const month = meses[d.getMonth()];
-    const year = String(d.getFullYear()).slice(-2);
-    return `${day}${month}${year}`;
-  };
-
-  const emailStatus = response.headers.get('x-email-status') || 'disabled';
-
-  const downloadUrl = window.URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = downloadUrl;
-  link.download = `Culto-${getNextSunday()}.pdf`;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  window.URL.revokeObjectURL(downloadUrl);
-
-  return emailStatus;
+  const data = await response.json();
+  return { status: data.emailStatus, fileNameBase: data.fileNameBase };
 };
 
 export const verifyPassword = async (password: string, role: 'admin' | 'canticos') => {
@@ -161,4 +146,55 @@ export const getBirthdays = async (): Promise<{ membros: BirthdayPerson[], depen
     throw new Error('Erro ao buscar aniversariantes');
   }
   return response.json();
+};
+
+export interface Notice {
+  _id: string;
+  title: string;
+  filename: string;
+  isRecurring: boolean;
+  isActive: boolean;
+  order: number;
+  duration: number;
+  createdAt: string;
+}
+
+export const getNotices = async (): Promise<Notice[]> => {
+  const response = await fetch(`${API_URL}/notices`);
+  if (!response.ok) throw new Error('Erro ao buscar avisos');
+  return response.json();
+};
+
+export const createNotice = async (formData: FormData): Promise<Notice> => {
+  const response = await fetch(`${API_URL}/notices`, {
+    method: 'POST',
+    body: formData,
+  });
+  if (!response.ok) throw new Error('Erro ao criar aviso');
+  return response.json();
+};
+
+export const updateNotice = async (id: string, updates: Partial<Notice>): Promise<Notice> => {
+  const response = await fetch(`${API_URL}/notices/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates),
+  });
+  if (!response.ok) throw new Error('Erro ao atualizar aviso');
+  return response.json();
+};
+
+export const deleteNotice = async (id: string): Promise<void> => {
+  const response = await fetch(`${API_URL}/notices/${id}`, { method: 'DELETE' });
+  if (!response.ok) throw new Error('Erro ao deletar aviso');
+};
+
+export const generateNoticeVideo = async (): Promise<string> => {
+  const response = await fetch(`${API_URL}/notices/generate-video`, { method: 'POST' });
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.message || 'Erro ao gerar vídeo');
+  }
+  const data = await response.json();
+  return data.videoUrl;
 };

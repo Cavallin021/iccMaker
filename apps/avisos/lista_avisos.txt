@@ -1,0 +1,11 @@
+file '/home/joao/Documentos/Pessoal/Projetos/iccMaker/apps/avisos/aviso-1788984895866-397956459.png'
+duration 10
+file '/home/joao/Documentos/Pessoal/Projetos/iccMaker/apps/avisos/aviso-1788984895864-352841285.png'
+duration 10
+file '/home/joao/Documentos/Pessoal/Projetos/iccMaker/apps/avisos/aviso-1788984895863-517327623.png'
+duration 10
+file '/home/joao/Documentos/Pessoal/Projetos/iccMaker/apps/avisos/aviso-1788984895860-892135958.png'
+duration 10
+file '/home/joao/Documentos/Pessoal/Projetos/iccMaker/apps/avisos/aviso-1788984895858-764028062.png'
+duration 10
+file '/home/joao/Documentos/Pessoal/Projetos/iccMaker/apps/avisos/aviso-1788984895858-764028062.png'

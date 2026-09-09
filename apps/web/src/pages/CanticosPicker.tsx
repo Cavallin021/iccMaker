@@ -129,6 +129,15 @@ export function CanticosPicker() {
             >
               Sair
             </button>
+            <a
+              href="/LOUVORES_DA_CAPITAL.pdf"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn btn-secondary btn-sm-text"
+              style={{ marginRight: '1rem', background: 'rgba(255, 255, 255, 0.1)', border: '1px solid var(--color-border)', color: 'white', textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}
+            >
+              📖 LOUVORES DA CAPITAL
+            </a>
             <button
               className={selectedOptions.filter(Boolean).length === 7 ? 'btn btn-primary btn-sm-text' : 'btn btn-disabled btn-sm-text'}
               disabled={selectedOptions.filter(Boolean).length !== 7 || isSending}

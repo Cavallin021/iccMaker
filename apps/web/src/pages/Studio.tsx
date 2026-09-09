@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { getOptions, getPendingSelections, generatePresentation, markSelectionProcessed, deleteSelection, getBirthdays, type Option, type Selection, type BirthdayPerson } from '../services/api';
 import { Login } from '../components/Login';
+import { AvisosManager } from './Avisos';
 
 const BASE_URL = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace(/\/api$/, '') : 'http://localhost:3001';
 
@@ -21,6 +22,34 @@ export function Studio() {
 
   const [generationStatus, setGenerationStatus] = useState<'idle' | 'generating' | 'success' | 'error'>('idle');
   const [generationMessage, setGenerationMessage] = useState('');
+  const [generatedFileName, setGeneratedFileName] = useState('');
+
+  // Save extraImages to IndexedDB when it changes
+  useEffect(() => {
+    const request = indexedDB.open('MakerStudioDB', 1);
+    request.onupgradeneeded = (e: any) => e.target.result.createObjectStore('extra_images_store');
+    request.onsuccess = (e: any) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains('extra_images_store')) return; // handled by upgrade
+      const tx = db.transaction('extra_images_store', 'readwrite');
+      tx.objectStore('extra_images_store').put(extraImages, 'last_extra_images');
+    };
+  }, [extraImages]);
+
+  // Load extraImages from IndexedDB on mount
+  useEffect(() => {
+    const request = indexedDB.open('MakerStudioDB', 1);
+    request.onupgradeneeded = (e: any) => e.target.result.createObjectStore('extra_images_store');
+    request.onsuccess = (e: any) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains('extra_images_store')) return;
+      const tx = db.transaction('extra_images_store', 'readonly');
+      const getReq = tx.objectStore('extra_images_store').get('last_extra_images');
+      getReq.onsuccess = () => {
+        if (getReq.result) setExtraImages(getReq.result);
+      };
+    };
+  }, []);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -67,7 +96,7 @@ export function Studio() {
     try {
       setGenerationStatus('generating');
       setGenerationMessage('Montando slides e enviando e-mail... Por favor aguarde.');
-      const status = await generatePresentation(activeSelection.songs, extraImages, preachTheme, preachTitle);
+      const { status, fileNameBase } = await generatePresentation(activeSelection.songs, extraImages, preachTheme, preachTitle, false);
 
       // Marcar como processada na API
       await markSelectionProcessed(activeSelection._id);
@@ -75,10 +104,12 @@ export function Studio() {
       if (status === 'success' || status === 'disabled') {
         localStorage.setItem('last_preach_theme', preachTheme);
         setGenerationStatus('success');
-        setGenerationMessage('Sucesso! O PDF foi baixado para o seu computador e o arquivo editável (.pptx) foi enviado para o e-mail da igreja.');
+        setGeneratedFileName(fileNameBase);
+        setGenerationMessage('Sucesso! A apresentação foi enviada para o e-mail da igreja.');
       } else {
         setGenerationStatus('error');
-        setGenerationMessage('Atenção: O PDF foi baixado com sucesso, MAS ocorreu uma falha ao enviar o e-mail para a igreja. Verifique a Senha de App (Gmail).');
+        setGeneratedFileName(fileNameBase);
+        setGenerationMessage('Atenção: A apresentação foi gerada, MAS ocorreu uma falha ao enviar o e-mail para a igreja. Verifique a Senha de App (Gmail).');
       }
     } catch (error: any) {
       console.error(error);
@@ -164,7 +195,11 @@ export function Studio() {
                   const getNextSunday = (dateString: string) => {
                     const d = new Date(dateString);
                     d.setDate(d.getDate() + ((7 - d.getDay()) % 7));
-                    return `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`;
+                    const day = String(d.getDate()).padStart(2, '0');
+                    const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+                    const month = meses[d.getMonth()];
+                    const year = d.getFullYear();
+                    return `${day} de ${month} de ${year}`;
                   };
 
                   return (
@@ -216,7 +251,7 @@ export function Studio() {
             <span style={{ fontSize: '1.5rem', marginRight: '0.5rem' }}>←</span>
             <span className="logo-text">Voltar às seleções</span>
           </div>
-          <div className="header-buttons">
+          <div className="header-buttons" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
             <button
               className="btn btn-primary btn-sm-text"
               disabled={generationStatus === 'generating'}
@@ -243,17 +278,17 @@ export function Studio() {
             <div style={{ flex: 1 }}>
               <h2 style={{ fontSize: '1.25rem', marginBottom: '0.5rem' }}>Avisos Extras (Opcional)</h2>
               <p style={{ margin: 0, color: 'var(--color-text-muted)', fontSize: '0.875rem', lineHeight: '1.4' }}>Arraste para o quadro ao lado ou clique para selecionar. Você pode arrastar as imagens abaixo para reordenar.</p>
-              
+
               {extraImages.length > 0 && (
                 <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                   <div style={{ display: 'inline-flex', alignItems: 'center', gap: '1rem', padding: '0.5rem 1rem', background: 'rgba(34, 197, 94, 0.1)', border: '1px solid #22c55e', borderRadius: '0.5rem', marginBottom: '0.5rem', alignSelf: 'flex-start' }}>
                     <span style={{ fontSize: '0.875rem', color: '#4ade80', fontWeight: 'bold' }}>✓ {extraImages.length} aviso(s) carregado(s)</span>
                     <button onClick={() => setExtraImages([])} style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', fontSize: '0.875rem', padding: 0 }}>Limpar Todos</button>
                   </div>
-                  
+
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '0.5rem' }}>
                     {extraImages.map((file, i) => (
-                      <div 
+                      <div
                         key={i}
                         draggable
                         onDragStart={(e) => {
@@ -271,20 +306,20 @@ export function Studio() {
                         onDrop={(e) => {
                           e.preventDefault();
                           if (draggedImageIndex === null || draggedImageIndex === i) return;
-                          
+
                           const newImages = [...extraImages];
                           const draggedItem = newImages[draggedImageIndex];
                           newImages.splice(draggedImageIndex, 1);
                           newImages.splice(i, 0, draggedItem);
-                          
+
                           setExtraImages(newImages);
                           setDraggedImageIndex(null);
                           setDragOverImageIndex(null);
                         }}
-                        style={{ 
-                          background: '#000', 
-                          borderRadius: '0.5rem', 
-                          overflow: 'hidden', 
+                        style={{
+                          background: '#000',
+                          borderRadius: '0.5rem',
+                          overflow: 'hidden',
                           border: dragOverImageIndex === i ? '2px solid var(--color-primary)' : '1px solid var(--color-border)',
                           opacity: draggedImageIndex === i ? 0.5 : 1,
                           cursor: 'grab',
@@ -302,7 +337,12 @@ export function Studio() {
             <div className="extra-images-dropzone">
               <input
                 type="file" multiple accept="image/*"
-                onChange={(e) => { if (e.target.files) setExtraImages(Array.from(e.target.files)); }}
+                onChange={(e) => {
+                  if (e.target.files) {
+                    const newFiles = Array.from(e.target.files);
+                    setExtraImages(prev => [...prev, ...newFiles]);
+                  }
+                }}
                 style={{ position: 'absolute', width: '100%', height: '100%', opacity: 0, cursor: 'pointer', zIndex: 2, top: 0, left: 0 }}
               />
               <div style={{
@@ -336,7 +376,7 @@ export function Studio() {
 
           <div style={{ marginBottom: '2rem', padding: '1.5rem', background: 'rgba(255, 255, 255, 0.03)', borderRadius: '0.5rem', border: '1px solid var(--color-border)' }}>
             <h2 style={{ fontSize: '1.25rem', marginBottom: '1rem' }}>Aniversariantes da Semana (Dom a Sáb)</h2>
-            
+
             {birthdays ? (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
                 <div>
@@ -360,7 +400,7 @@ export function Studio() {
                     <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                       {birthdays.dependentes.map((b, idx) => (
                         <li key={idx} style={{ marginBottom: '0.25rem', fontSize: '0.9rem' }}>
-                          <strong style={{ color: 'var(--color-text-muted)' }}>{b.date}</strong> - {b.name} <br/>
+                          <strong style={{ color: 'var(--color-text-muted)' }}>{b.date}</strong> - {b.name} <br />
                           <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>(Resp: {b.responsavel})</span>
                         </li>
                       ))}
@@ -373,6 +413,10 @@ export function Studio() {
             ) : (
               <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>Buscando aniversariantes da planilha...</p>
             )}
+          </div>
+
+          <div style={{ marginBottom: '2rem' }}>
+            <AvisosManager />
           </div>
         </main>
 
@@ -446,8 +490,8 @@ export function Studio() {
                       <img src={`${BASE_URL}/template/static_6.jpg`} alt="Estático 6" style={{ width: '100%', display: 'block', opacity: 0.7 }} />
                       {(preachTheme || preachTitle) && (
                         <div style={{ position: 'absolute', top: '35%', left: '7.5%', width: '47.5%', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                          <span style={{ color: '#FFFF00', fontWeight: 'bold', fontSize: '0.65rem', lineHeight: '1.2' }}>{preachTheme}</span>
-                          <span style={{ color: '#FFFF00', fontWeight: 'bold', fontSize: '0.85rem', lineHeight: '1.2' }}>{preachTitle}</span>
+                          <span style={{ color: '#FFFF00', fontWeight: 'bold', fontSize: '0.4rem', lineHeight: '1.2' }}>{preachTheme}</span>
+                          <span style={{ color: '#FFFF00', fontWeight: 'bold', fontSize: '0.4rem', lineHeight: '1.2' }}>{preachTitle}</span>
                         </div>
                       )}
                     </div>
@@ -470,14 +514,37 @@ export function Studio() {
               {generationStatus === 'error' && 'Atenção! ⚠️'}
             </h2>
             <p style={{ marginBottom: '2rem', color: 'var(--color-text-muted)', lineHeight: '1.5' }}>{generationMessage}</p>
+
             {generationStatus !== 'generating' && (
-              <button className="btn btn-primary" onClick={() => {
-                setGenerationStatus('idle');
-                setActiveSelection(null);
-                fetchData(); // Reload selections
-              }} style={{ width: '100%', padding: '0.875rem' }}>
-                Entendido, Fechar
-              </button>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div style={{ display: 'flex', gap: '1rem' }}>
+                  <a
+                    href={`${BASE_URL}/api/options/download/${generatedFileName}.pdf`}
+                    download
+                    target="_blank"
+                    className="btn btn-secondary"
+                    style={{ flex: 1, textAlign: 'center', textDecoration: 'none' }}
+                  >
+                    📄 Baixar PDF
+                  </a>
+                  <a
+                    href={`${BASE_URL}/api/options/download/${generatedFileName}.pptx`}
+                    download
+                    target="_blank"
+                    className="btn btn-secondary"
+                    style={{ flex: 1, textAlign: 'center', textDecoration: 'none' }}
+                  >
+                    📊 Baixar PPTX
+                  </a>
+                </div>
+                <button className="btn btn-primary" onClick={() => {
+                  setGenerationStatus('idle');
+                  setActiveSelection(null);
+                  fetchData(); // Reload selections
+                }} style={{ width: '100%', padding: '0.875rem' }}>
+                  Entendido, Fechar
+                </button>
+              </div>
             )}
           </div>
         </div>
