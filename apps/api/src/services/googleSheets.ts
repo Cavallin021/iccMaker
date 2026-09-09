@@ -22,12 +22,8 @@ export interface BirthdayPerson {
   responsavel?: string;
 }
 
-export const getBirthdaysForNextWeek = async (): Promise<{ membros: BirthdayPerson[], dependentes: BirthdayPerson[] }> => {
-  if (!clientEmail || !privateKey || !sheetId) {
-    console.warn('Google Sheets API credentials not fully configured.');
-    return { membros: [], dependentes: [] };
-  }
-
+// Helper para gerar as datas alvo da próxima semana (Domingo a Sábado)
+const getTargetDates = (): string[] => {
   const nextSunday = new Date();
   nextSunday.setDate(nextSunday.getDate() + ((7 - nextSunday.getDay()) % 7));
 
@@ -39,7 +35,26 @@ export const getBirthdaysForNextWeek = async (): Promise<{ membros: BirthdayPers
     const monthStr = String(d.getMonth() + 1).padStart(2, '0');
     targetDates.push(`${dayStr}/${monthStr}`);
   }
+  return targetDates;
+};
 
+// Helper para padronizar strings de data (ex: D/M/AAAA ou DD/MM) para DD/MM
+const parseDayMonth = (dateStr: string): string | null => {
+  if (!dateStr) return null;
+  const parts = dateStr.split('/');
+  if (parts.length >= 2) {
+    return `${parts[0].padStart(2, '0')}/${parts[1].padStart(2, '0')}`;
+  }
+  return null;
+};
+
+export const getBirthdaysForNextWeek = async (): Promise<{ membros: BirthdayPerson[], dependentes: BirthdayPerson[] }> => {
+  if (!clientEmail || !privateKey || !sheetId) {
+    console.warn('Google Sheets API credentials not fully configured.');
+    return { membros: [], dependentes: [] };
+  }
+
+  const targetDates = getTargetDates();
   const result = {
     membros: [] as BirthdayPerson[],
     dependentes: [] as BirthdayPerson[],
@@ -51,52 +66,40 @@ export const getBirthdaysForNextWeek = async (): Promise<{ membros: BirthdayPers
       ranges: ['membros!A2:B', 'dependentes!A2:C'],
     });
 
-    const membrosData = response.data.valueRanges?.[0].values || [];
-    const dependentesData = response.data.valueRanges?.[1].values || [];
+    const membrosData: string[][] = response.data.valueRanges?.[0].values || [];
+    const dependentesData: string[][] = response.data.valueRanges?.[1].values || [];
 
-    const processMembroRow = (row: any[]) => {
-      const name = row[0] as string;
-      const dateStr = row[1] as string;
+    // Helper genérico para processar qualquer linha de aniversariante
+    const processRow = (row: string[], nameIndex: number, dateIndex: number, responsavelIndex?: number): BirthdayPerson | null => {
+      const name = row[nameIndex];
+      const dateStr = row[dateIndex];
       if (!name || !dateStr) return null;
 
-      const parts = dateStr.split('/');
-      if (parts.length >= 2) {
-        const rowDayMonth = `${parts[0].padStart(2, '0')}/${parts[1].padStart(2, '0')}`;
-        if (targetDates.includes(rowDayMonth)) {
-          return { name, date: rowDayMonth };
+      const formattedDate = parseDayMonth(dateStr);
+      if (formattedDate && targetDates.includes(formattedDate)) {
+        const person: BirthdayPerson = { name, date: formattedDate };
+        if (responsavelIndex !== undefined && row[responsavelIndex]) {
+          person.responsavel = row[responsavelIndex];
         }
-      }
-      return null;
-    };
-
-    const processDependenteRow = (row: any[]) => {
-      const responsavel = row[0] as string; // Coluna A: Nome do Responsável (Membro)
-      const dateStr = row[1] as string;     // Coluna B: Data
-      const name = row[2] as string;        // Coluna C: Nome do Dependente (Aniversariante)
-      if (!name || !dateStr) return null;
-
-      const parts = dateStr.split('/');
-      if (parts.length >= 2) {
-        const rowDayMonth = `${parts[0].padStart(2, '0')}/${parts[1].padStart(2, '0')}`;
-        if (targetDates.includes(rowDayMonth)) {
-          return { name, date: rowDayMonth, responsavel };
-        }
+        return person;
       }
       return null;
     };
 
     membrosData.forEach(row => {
-      const person = processMembroRow(row);
+      // Membros: Nome (A=0), Data (B=1)
+      const person = processRow(row, 0, 1);
       if (person) result.membros.push(person);
     });
 
     dependentesData.forEach(row => {
-      const person = processDependenteRow(row);
+      // Dependentes: Nome (C=2), Data (B=1), Responsável (A=0)
+      const person = processRow(row, 2, 1, 0);
       if (person) result.dependentes.push(person);
     });
 
   } catch (error) {
-    console.error('Error fetching Google Sheets:', error);
+    console.error('Error fetching Google Sheets for birthdays:', error);
   }
 
   return result;
