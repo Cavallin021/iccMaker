@@ -178,6 +178,8 @@ export function CanticosPicker() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
               {filteredOptions.map((option) => {
                 const { badge, name } = formatTitle(option.title);
+                const selectedIndex = selectedOptions.indexOf(option._id);
+                const isSelected = selectedIndex !== -1;
                 return (
                   <div
                     key={option._id}
@@ -185,21 +187,39 @@ export function CanticosPicker() {
                     style={{
                       padding: '1.5rem',
                       cursor: 'pointer',
-                      border: selectedOptions.includes(option._id) ? '2px solid var(--color-primary)' : '2px solid transparent',
-                      background: selectedOptions.includes(option._id) ? 'rgba(126, 34, 206, 0.1)' : 'rgba(255, 255, 255, 0.03)',
+                      position: 'relative',
+                      overflow: 'hidden',
+                      border: isSelected ? '2px solid var(--color-primary)' : '2px solid transparent',
+                      background: isSelected ? 'rgba(126, 34, 206, 0.1)' : 'rgba(255, 255, 255, 0.03)',
                       transition: 'all 0.2s ease',
                     }}
                     onClick={() => toggleOption(option._id)}
                   >
-                    <div className="flex justify-between items-start" style={{ marginBottom: '1rem' }}>
+                    {isSelected && (
+                      <div style={{
+                        position: 'absolute',
+                        right: '-0.5rem',
+                        bottom: '-1.5rem',
+                        fontSize: '7rem',
+                        fontWeight: 900,
+                        color: 'var(--color-primary)',
+                        opacity: 0.15,
+                        lineHeight: 1,
+                        pointerEvents: 'none',
+                        userSelect: 'none'
+                      }}>
+                        {selectedIndex + 1}
+                      </div>
+                    )}
+                    <div className="flex justify-between items-start" style={{ marginBottom: '1rem', position: 'relative', zIndex: 1 }}>
                       <span className="badge">{badge}</span>
                       <span style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>
                         {option.slidesCount} slides
                       </span>
                     </div>
-                    <h3 style={{ fontSize: '1.25rem', marginBottom: '1rem' }}>{name}</h3>
-                    <div style={{ fontSize: '0.875rem', fontWeight: 600, color: selectedOptions.includes(option._id) ? 'var(--color-primary)' : 'var(--color-text-muted)' }}>
-                      {selectedOptions.includes(option._id) ? '✓ Adicionado' : '+ Clique para adicionar'}
+                    <h3 style={{ fontSize: '1.25rem', marginBottom: '1rem', position: 'relative', zIndex: 1 }}>{name}</h3>
+                    <div style={{ fontSize: '0.875rem', fontWeight: 600, color: isSelected ? 'var(--color-primary)' : 'var(--color-text-muted)', position: 'relative', zIndex: 1 }}>
+                      {isSelected ? `✓ ${selectedIndex + 1}º Adicionado` : '+ Clique para adicionar'}
                     </div>
                   </div>
                 );
