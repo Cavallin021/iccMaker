@@ -27,9 +27,9 @@ export function Studio() {
   // Save extraImages to IndexedDB when it changes
   useEffect(() => {
     const request = indexedDB.open('MakerStudioDB', 1);
-    request.onupgradeneeded = (e: any) => e.target.result.createObjectStore('extra_images_store');
-    request.onsuccess = (e: any) => {
-      const db = e.target.result;
+    request.onupgradeneeded = (e: Event) => (e.target as IDBOpenDBRequest).result.createObjectStore('extra_images_store');
+    request.onsuccess = (e: Event) => {
+      const db = (e.target as IDBOpenDBRequest).result;
       if (!db.objectStoreNames.contains('extra_images_store')) return; // handled by upgrade
       const tx = db.transaction('extra_images_store', 'readwrite');
       tx.objectStore('extra_images_store').put(extraImages, 'last_extra_images');
@@ -39,9 +39,9 @@ export function Studio() {
   // Load extraImages from IndexedDB on mount
   useEffect(() => {
     const request = indexedDB.open('MakerStudioDB', 1);
-    request.onupgradeneeded = (e: any) => e.target.result.createObjectStore('extra_images_store');
-    request.onsuccess = (e: any) => {
-      const db = e.target.result;
+    request.onupgradeneeded = (e: Event) => (e.target as IDBOpenDBRequest).result.createObjectStore('extra_images_store');
+    request.onsuccess = (e: Event) => {
+      const db = (e.target as IDBOpenDBRequest).result;
       if (!db.objectStoreNames.contains('extra_images_store')) return;
       const tx = db.transaction('extra_images_store', 'readonly');
       const getReq = tx.objectStore('extra_images_store').get('last_extra_images');
@@ -84,7 +84,8 @@ export function Studio() {
       try {
         await deleteSelection(id);
         fetchData();
-      } catch (error: any) {
+      } catch (e) {
+    const error = e as Error;
         alert(error.message || 'Erro ao deletar seleção');
       }
     }
@@ -109,9 +110,10 @@ export function Studio() {
       } else {
         setGenerationStatus('error');
         setGeneratedFileName(fileNameBase);
-        setGenerationMessage('Atenção: A apresentação foi gerada, MAS ocorreu uma falha ao enviar o e-mail para a igreja. Verifique a Senha de App (Gmail).');
+        setGenerationMessage('Atenção: A apresentação foi gerada, mas houve uma falha no envio automático do e-mail. Por favor, avise o administrador da equipe.');
       }
-    } catch (error: any) {
+    } catch (e) {
+    const error = e as Error;
       console.error(error);
       setGenerationStatus('error');
       setGenerationMessage(error.message || 'Erro crítico ao tentar gerar a apresentação.');
@@ -420,9 +422,7 @@ export function Studio() {
           </div>
         </main>
 
-        <aside className="glass-panel sidebar-preview" style={{
-          width: '400px', borderRight: 'none', borderTop: 'none', borderBottom: 'none', borderRadius: 0, display: 'flex', flexDirection: 'column', background: 'rgba(15, 23, 42, 0.95)'
-        }}>
+        <aside className="sidebar glass-panel sidebar-preview" style={{ borderRadius: 0, borderRight: 'none', borderBottom: 'none' }}>
           <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--color-border)' }}>
             <h2 style={{ fontSize: '1.25rem', margin: 0 }}>Preview Completo</h2>
           </div>
@@ -441,13 +441,13 @@ export function Studio() {
               const renderBlock = (index: number) => {
                 const opt = selectedOptionsData[index];
                 if (!opt) return null;
-                const { name } = formatTitle(opt.title);
+                const { name } = formatTitle(opt.title || '');
                 return (
                   <div style={{ paddingLeft: '1rem', borderLeft: '3px solid var(--color-primary)' }}>
                     <h4 style={{ fontSize: '1rem', color: 'var(--color-primary)', marginBottom: '1rem' }}>{index + 1}. {name}</h4>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                      {opt.images.map((img, imgIndex) => {
-                        const folderName = opt.filePath.split('/').pop();
+                      {(opt.images || []).map((img, imgIndex) => {
+                        const folderName = (opt.filePath || '').split('/').pop();
                         return (
                           <div key={imgIndex} style={{ background: '#000', borderRadius: '0.5rem', overflow: 'hidden', border: '1px solid var(--color-border)' }}>
                             <img src={`${BASE_URL}/static/${folderName}/${img}`} alt={`Capa`} style={{ width: '100%', display: 'block' }} loading="lazy" />

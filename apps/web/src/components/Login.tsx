@@ -23,7 +23,8 @@ export function Login({ role, onLoginSuccess, title = "Acesso Restrito", descrip
       if (isValid) {
         onLoginSuccess(loginPassword);
       }
-    } catch (error: any) {
+    } catch (e) {
+    const error = e as Error;
       setLoginError(error.message || 'Senha incorreta');
     } finally {
       setIsLoggingIn(false);

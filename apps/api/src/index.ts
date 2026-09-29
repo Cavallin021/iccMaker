@@ -17,7 +17,8 @@ const connectDB = async () => {
   try {
     const conn = await mongoose.connect(process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/iccmaker');
     console.log(`MongoDB Connected: ${conn.connection.host}`);
-  } catch (error: any) {
+  } catch (e) {
+    const error = e as Error;
     console.error(`Falha ao conectar no MongoDB: ${error.message}`);
     console.error(`Certifique-se de que o MongoDB está rodando localmente na porta 27017.`);
     // Removido process.exit(1) para não derrubar o npm run dev

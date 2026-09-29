@@ -39,7 +39,7 @@ export const buildPresentationFiles = async (
     margin: 0
   });
 
-  const pdfChunks: any[] = [];
+  const pdfChunks: Buffer[] = [];
   pdfDoc.on('data', chunk => pdfChunks.push(chunk));
   const pdfPromise = new Promise<Buffer>((resolve) => {
     pdfDoc.on('end', () => resolve(Buffer.concat(pdfChunks)));

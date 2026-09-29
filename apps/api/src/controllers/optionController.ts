@@ -31,9 +31,10 @@ const cleanupTempFiles = () => {
 
 export const getOptions = async (req: Request, res: Response) => {
   try {
-    const options = await Option.find().sort({ createdAt: -1 });
+    const options = await Option.find().sort({ createdAt: -1 }).lean();
     res.json(options);
-  } catch (error: any) {
+  } catch (e) {
+    const error = e as Error;
     res.status(500).json({ message: error.message });
   }
 };
@@ -42,7 +43,8 @@ export const getBirthdaysList = async (req: Request, res: Response) => {
   try {
     const birthdays = await getBirthdaysForNextWeek();
     res.json(birthdays);
-  } catch (error: any) {
+  } catch (e) {
+    const error = e as Error;
     console.error(error);
     res.status(500).json({ message: 'Erro ao buscar aniversariantes', error: error.message });
   }
@@ -67,7 +69,8 @@ export const createOption = async (req: Request, res: Response) => {
 
     const savedOption = await newOption.save();
     res.status(201).json(savedOption);
-  } catch (error: any) {
+  } catch (e) {
+    const error = e as Error;
     res.status(500).json({ message: error.message });
   }
 };
@@ -113,7 +116,8 @@ export const generatePresentation = async (req: Request, res: Response) => {
     let videoBuffer: Buffer | null = null;
     try {
       videoBuffer = await buildVideoBuffer();
-    } catch (err: any) {
+    } catch (e) {
+    const err = e as Error;
       console.error('Erro ao gerar vídeo dos avisos durante a apresentação:', err.message);
     }
 
@@ -125,7 +129,8 @@ export const generatePresentation = async (req: Request, res: Response) => {
         const videoName = fileNameBase.replace('Culto-', 'Avisos-') + '.mp4';
         await sendPresentationEmail(pptxBuffer, `${fileNameBase}.pptx`, videoBuffer, videoBuffer ? videoName : undefined);
         emailStatus = 'success';
-      } catch (err: any) {
+      } catch (e) {
+    const err = e as Error;
         console.error('Erro ao enviar e-mail:', err.message);
         emailStatus = 'failed';
       }
@@ -155,7 +160,8 @@ export const generatePresentation = async (req: Request, res: Response) => {
       }
     }
 
-  } catch (error: any) {
+  } catch (e) {
+    const error = e as Error;
     console.error(error);
     res.status(500).json({ message: 'Erro ao gerar apresentação', error: error.message });
   }
@@ -171,7 +177,8 @@ export const downloadGeneratedFile = (req: Request, res: Response) => {
     }
 
     res.download(filePath);
-  } catch (error: any) {
+  } catch (e) {
+    const error = e as Error;
     res.status(500).json({ message: 'Erro ao fazer o download', error: error.message });
   }
 };

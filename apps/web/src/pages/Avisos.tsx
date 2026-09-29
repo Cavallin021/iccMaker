@@ -30,7 +30,8 @@ export const AvisosManager: React.FC = () => {
       // Ensure sorted by order
       data.sort((a, b) => a.order - b.order);
       setNotices(data);
-    } catch (err: any) {
+    } catch (e) {
+    const err = e as Error;
       setError(err.message);
     } finally {
       if (showLoading) setLoading(false);
@@ -63,7 +64,8 @@ export const AvisosManager: React.FC = () => {
       setDuration(10);
 
       await fetchNotices(false);
-    } catch (err: any) {
+    } catch (e) {
+    const err = e as Error;
       alert('Erro ao enviar imagem: ' + err.message);
     } finally {
       setUploading(false);
@@ -75,7 +77,8 @@ export const AvisosManager: React.FC = () => {
     try {
       await deleteNotice(id);
       await fetchNotices(false);
-    } catch (err: any) {
+    } catch (e) {
+    const err = e as Error;
       alert('Erro ao apagar: ' + err.message);
     }
   };
@@ -84,7 +87,8 @@ export const AvisosManager: React.FC = () => {
     try {
       await updateNotice(id, { isActive: !currentStatus });
       await fetchNotices(false);
-    } catch (err: any) {
+    } catch (e) {
+    const err = e as Error;
       alert('Erro ao atualizar: ' + err.message);
     }
   };
@@ -92,7 +96,8 @@ export const AvisosManager: React.FC = () => {
   const handleUpdateDuration = async (id: string, newDuration: number) => {
     try {
       await updateNotice(id, { duration: newDuration });
-    } catch (err: any) {
+    } catch (e) {
+    const err = e as Error;
       alert('Erro ao atualizar duração: ' + err.message);
     }
   };
@@ -117,7 +122,8 @@ export const AvisosManager: React.FC = () => {
       });
       await Promise.all(updatePromises);
       await fetchNotices(false);
-    } catch (err: any) {
+    } catch (e) {
+    const err = e as Error;
       alert('Erro ao reordenar: ' + err.message);
       await fetchNotices(false);
     }

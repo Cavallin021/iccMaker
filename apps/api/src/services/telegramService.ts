@@ -1,9 +1,9 @@
-export const sendTelegramNotification = async (message: string): Promise<void> => {
+export const sendTelegramNotification = async (message: string): Promise<boolean> => {
   const { TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID } = process.env;
 
   if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
     console.warn('TELEGRAM_BOT_TOKEN ou TELEGRAM_CHAT_ID não definidos. Notificação ignorada.');
-    return;
+    return false;
   }
 
   const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
@@ -24,8 +24,12 @@ export const sendTelegramNotification = async (message: string): Promise<void> =
     if (!response.ok) {
       const err = await response.text();
       console.error('Falha ao enviar notificação do Telegram:', err);
+      return false;
     }
+    
+    return true;
   } catch (error) {
     console.error('Erro de rede ao enviar notificação do Telegram:', error);
+    return false;
   }
 };

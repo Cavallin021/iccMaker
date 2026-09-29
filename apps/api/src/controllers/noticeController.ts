@@ -13,9 +13,10 @@ if (!fs.existsSync(AVISOS_DIR)) {
 
 export const getNotices = async (req: Request, res: Response): Promise<void> => {
   try {
-    const notices = await Notice.find().sort({ order: 1, createdAt: -1 });
+    const notices = await Notice.find().sort({ order: 1, createdAt: -1 }).lean();
     res.json(notices);
-  } catch (error: any) {
+  } catch (e) {
+    const error = e as Error;
     res.status(500).json({ message: 'Erro ao buscar avisos', error: error.message });
   }
 };
@@ -44,7 +45,8 @@ export const createNotice = async (req: Request, res: Response): Promise<void> =
 
     await newNotice.save();
     res.status(201).json(newNotice);
-  } catch (error: any) {
+  } catch (e) {
+    const error = e as Error;
     res.status(500).json({ message: 'Erro ao criar aviso', error: error.message });
   }
 };
@@ -61,7 +63,8 @@ export const updateNotice = async (req: Request, res: Response): Promise<void> =
     }
     
     res.json(notice);
-  } catch (error: any) {
+  } catch (e) {
+    const error = e as Error;
     res.status(500).json({ message: 'Erro ao atualizar aviso', error: error.message });
   }
 };
@@ -83,7 +86,8 @@ export const deleteNotice = async (req: Request, res: Response): Promise<void> =
     }
 
     res.json({ message: 'Aviso removido com sucesso.' });
-  } catch (error: any) {
+  } catch (e) {
+    const error = e as Error;
     res.status(500).json({ message: 'Erro ao remover aviso', error: error.message });
   }
 };
@@ -91,28 +95,29 @@ export const deleteNotice = async (req: Request, res: Response): Promise<void> =
 export const buildVideoBuffer = async (): Promise<Buffer | null> => {
   return new Promise(async (resolve, reject) => {
     try {
-      const activeNotices = await Notice.find({ isActive: true }).sort({ order: 1 });
+      const activeNotices = await Notice.find({ isActive: true }).sort({ order: 1 }).lean();
       if (activeNotices.length === 0) {
         return resolve(null);
       }
 
-      const listPath = path.join(AVISOS_DIR, 'lista_avisos.txt');
       const outputPath = path.join(AVISOS_DIR, 'avisos.mp4');
       
-      let listContent = '';
-      for (const notice of activeNotices) {
+      let ffmpegInputs = '';
+      let filterComplex = '';
+      let concatInputs = '';
+
+      activeNotices.forEach((notice, index) => {
         const imgPath = path.join(AVISOS_DIR, notice.filename).replace(/\\/g, '/');
-        listContent += `file '${imgPath}'\n`;
-        listContent += `duration ${notice.duration}\n`;
-      }
-      
-      const lastNotice = activeNotices[activeNotices.length - 1];
-      const lastImgPath = path.join(AVISOS_DIR, lastNotice.filename).replace(/\\/g, '/');
-      listContent += `file '${lastImgPath}'\n`;
+        // Define framerate fixo para evitar problemas de fps, loop e duração
+        ffmpegInputs += `-loop 1 -framerate 30 -t ${notice.duration} -i "${imgPath}" `;
+        // Redimensiona mantendo proporção (letterbox) para garantir mesma resolução antes de concatenar
+        filterComplex += `[${index}:v]scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,setsar=1[v${index}]; `;
+        concatInputs += `[v${index}]`;
+      });
 
-      fs.writeFileSync(listPath, listContent, 'utf-8');
+      filterComplex += `${concatInputs}concat=n=${activeNotices.length}:v=1:a=0[v]`;
 
-      const ffmpegCmd = `ffmpeg -y -f concat -safe 0 -i "${listPath}" -vsync vfr -pix_fmt yuv420p "${outputPath}"`;
+      const ffmpegCmd = `ffmpeg -y ${ffmpegInputs}-filter_complex "${filterComplex}" -map "[v]" -pix_fmt yuv420p -c:v libx264 "${outputPath}"`;
       
       exec(ffmpegCmd, (error, stdout, stderr) => {
         if (error) {
@@ -138,7 +143,8 @@ export const generateVideo = async (req: Request, res: Response): Promise<void> 
       return;
     }
     res.json({ message: 'Vídeo gerado com sucesso!', videoUrl: '/avisos/avisos.mp4' });
-  } catch (error: any) {
+  } catch (e) {
+    const error = e as Error;
     res.status(500).json({ message: 'Erro ao preparar vídeo', error: error.message });
   }
 };

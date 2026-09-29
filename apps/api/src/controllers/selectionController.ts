@@ -28,22 +28,32 @@ export const createSelection = async (req: Request, res: Response): Promise<void
       return `${day} de ${month} de ${year}`;
     };
 
-    // Enviar notificação para o celular via Telegram
+    // Tenta notificar o admin
     const msg = `🔔 *Nova Seleção de Cânticos!*\n\nA equipe enviou uma nova lista para o culto.\nAcesse o Estúdio para gerar a apresentação de *${getNextSunday()}*.`;
-    await sendTelegramNotification(msg);
+    const notificationSent = await sendTelegramNotification(msg);
+
+    if (!notificationSent) {
+      res.status(201).json({ 
+        message: 'Sua seleção foi salva no sistema com sucesso, mas o servidor falhou em notificar a equipe. Por favor, avise o administrador.', 
+        selection: newSelection 
+      });
+      return;
+    }
 
     res.status(201).json({ message: 'Seleção enviada com sucesso!', selection: newSelection });
-  } catch (error: any) {
+  } catch (e) {
+    const error = e as Error;
     res.status(500).json({ message: 'Erro ao enviar seleção', error: error.message });
   }
 };
 
 export const getPendingSelections = async (req: Request, res: Response): Promise<void> => {
   try {
-    // Busca todas as seleções (não apenas as pendentes)
-    const selections = await Selection.find({}).sort({ createdAt: -1 });
+    // Busca todas as seleções (não apenas as pendentes) usando .lean() para máxima performance
+    const selections = await Selection.find({}).sort({ createdAt: -1 }).lean();
     res.json(selections);
-  } catch (error: any) {
+  } catch (e) {
+    const error = e as Error;
     res.status(500).json({ message: 'Erro ao buscar seleções', error: error.message });
   }
 };
@@ -59,7 +69,8 @@ export const markAsProcessed = async (req: Request, res: Response): Promise<void
     }
 
     res.json({ message: 'Seleção marcada como processada.', selection });
-  } catch (error: any) {
+  } catch (e) {
+    const error = e as Error;
     res.status(500).json({ message: 'Erro ao atualizar seleção', error: error.message });
   }
 };
@@ -75,7 +86,8 @@ export const deleteSelection = async (req: Request, res: Response): Promise<void
     }
 
     res.json({ message: 'Seleção removida com sucesso.' });
-  } catch (error: any) {
+  } catch (e) {
+    const error = e as Error;
     res.status(500).json({ message: 'Erro ao remover seleção', error: error.message });
   }
 };

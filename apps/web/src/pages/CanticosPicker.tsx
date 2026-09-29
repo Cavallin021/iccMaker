@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { getOptions, createSelection, type Option } from '../services/api';
 import { Login } from '../components/Login';
@@ -14,8 +14,10 @@ export function CanticosPicker() {
   const [isSending, setIsSending] = useState(false);
 
   useEffect(() => {
-    fetchOptions();
-  }, []);
+    if (isAuthenticated) {
+      fetchOptions();
+    }
+  }, [isAuthenticated]);
 
   const fetchOptions = async () => {
     try {
@@ -66,7 +68,8 @@ export function CanticosPicker() {
       setSelectedOptions(Array(7).fill(null));
       sessionStorage.removeItem('canticos_password');
       setIsAuthenticated(false);
-    } catch (error: any) {
+    } catch (e) {
+    const error = e as Error;
       alert(error.message || 'Erro ao enviar cânticos.');
     } finally {
       setIsSending(false);
@@ -78,6 +81,23 @@ export function CanticosPicker() {
     setIsAuthenticated(false);
     setSelectedOptions(Array(7).fill(null));
   };
+
+  const normalizeText = (text: string) => {
+    return text ? text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() : '';
+  };
+
+  const filteredOptions = useMemo(() => {
+    if (!Array.isArray(options)) return [];
+    return [...options]
+      .filter(opt => {
+        const search = normalizeText(searchTerm);
+        if (!search) return true;
+        const titleMatch = normalizeText(opt.title || '').includes(search);
+        const lyricsMatch = normalizeText(opt.lyrics || '').includes(search);
+        return titleMatch || lyricsMatch;
+      })
+      .sort((a, b) => (a.title || '').localeCompare(b.title || '', undefined, { numeric: true }));
+  }, [options, searchTerm]);
 
   if (!isAuthenticated) {
     return (
@@ -98,20 +118,6 @@ export function CanticosPicker() {
       </Login>
     );
   }
-
-  const normalizeText = (text: string) => {
-    return text ? text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() : '';
-  };
-
-  const filteredOptions = [...options]
-    .filter(opt => {
-      const search = normalizeText(searchTerm);
-      if (!search) return true;
-      const titleMatch = normalizeText(opt.title).includes(search);
-      const lyricsMatch = normalizeText(opt.lyrics || '').includes(search);
-      return titleMatch || lyricsMatch;
-    })
-    .sort((a, b) => a.title.localeCompare(b.title, undefined, { numeric: true }));
 
   return (
     <div className="app-container">
@@ -186,7 +192,7 @@ export function CanticosPicker() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
               {filteredOptions.map((option) => {
-                const { badge, name } = formatTitle(option.title);
+                const { badge, name } = formatTitle(option.title || '');
                 const selectedIndex = selectedOptions.indexOf(option._id);
                 const isSelected = selectedIndex !== -1;
                 return (
@@ -237,16 +243,7 @@ export function CanticosPicker() {
           )}
         </main>
 
-        <aside className="glass-panel" style={{
-          width: '400px',
-          borderRight: 'none',
-          borderTop: 'none',
-          borderBottom: 'none',
-          borderRadius: 0,
-          display: 'flex',
-          flexDirection: 'column',
-          background: 'rgba(15, 23, 42, 0.95)'
-        }}>
+        <aside className="sidebar glass-panel" style={{ borderRadius: 0, borderRight: 'none', borderBottom: 'none' }}>
           <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--color-border)' }}>
             <h2 style={{ fontSize: '1.25rem', margin: 0 }}>Preview</h2>
             <p style={{ fontSize: '0.875rem', margin: '0.5rem 0 0 0' }}>Ordem dos {selectedOptions.filter(Boolean).length}/7 cânticos selecionados</p>
@@ -262,7 +259,7 @@ export function CanticosPicker() {
                   </div>
                 );
               }
-              const { name } = formatTitle(opt.title);
+              const { name } = formatTitle(opt.title || '');
               return (
                 <div key={index} style={{ paddingLeft: '1rem', borderLeft: '3px solid var(--color-primary)', position: 'relative' }}>
                   <button
@@ -280,8 +277,8 @@ export function CanticosPicker() {
                   </button>
                   <h4 style={{ fontSize: '1rem', color: 'var(--color-primary)', marginBottom: '1rem', paddingRight: '4rem' }}>{index + 1}. {name}</h4>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                    {opt.images.map((img, imgIndex) => {
-                      const folderName = opt.filePath.split('/').pop();
+                    {(opt.images || []).map((img, imgIndex) => {
+                      const folderName = (opt.filePath || '').split('/').pop();
                       return (
                         <div key={imgIndex} style={{ background: '#000', borderRadius: '0.5rem', overflow: 'hidden', border: '1px solid var(--color-border)' }}>
                           <img src={`${BASE_URL}/static/${folderName}/${img}`} alt={`Capa ${imgIndex + 1}`} style={{ width: '100%', display: 'block' }} loading="lazy" />
