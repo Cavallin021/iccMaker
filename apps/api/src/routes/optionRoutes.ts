@@ -1,7 +1,6 @@
 import express from 'express';
 import multer from 'multer';
-import path from 'path';
-import { getOptions, createOption, generatePresentation, getBirthdaysList, downloadGeneratedFile } from '../controllers/optionController';
+import { getOptions, createOption, generatePresentation, getBirthdaysList, downloadGeneratedFile, deleteOption } from '../controllers/optionController';
 
 const router = express.Router();
 
@@ -21,8 +20,9 @@ const upload = multer({ storage });
 
 router.get('/', getOptions);
 router.get('/birthdays', getBirthdaysList);
-router.post('/', upload.single('file'), createOption);
+router.post('/', upload.array('images', 50), createOption);
 router.post('/generate', upload.array('extraImages', 20), generatePresentation);
 router.get('/download/:filename', downloadGeneratedFile);
+router.delete('/:id', deleteOption);
 
 export default router;

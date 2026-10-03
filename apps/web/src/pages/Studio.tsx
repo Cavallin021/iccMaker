@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { getOptions, getPendingSelections, generatePresentation, markSelectionProcessed, deleteSelection, getBirthdays, type Option, type Selection, type BirthdayPerson } from '../services/api';
+import { getOptions, getPendingSelections, generatePresentation, markSelectionProcessed, deleteSelection, getBirthdays, createOption, deleteOption, type Option, type Selection, type BirthdayPerson } from '../services/api';
 import { Login } from '../components/Login';
 import { AvisosManager } from './Avisos';
 
@@ -24,6 +24,18 @@ export function Studio() {
   const [generationMessage, setGenerationMessage] = useState('');
   const [generatedFileName, setGeneratedFileName] = useState('');
 
+  // Estados para o Modal de Novo Cântico
+  const [isNewSongModalOpen, setIsNewSongModalOpen] = useState(false);
+  const [newSongTitle, setNewSongTitle] = useState('');
+  const [newSongCategory, setNewSongCategory] = useState('LOUVOR');
+  const [newSongFiles, setNewSongFiles] = useState<File[]>([]);
+  const [newSongDraggedIndex, setNewSongDraggedIndex] = useState<number | null>(null);
+  const [newSongDragOverIndex, setNewSongDragOverIndex] = useState<number | null>(null);
+  const [isSubmittingNewSong, setIsSubmittingNewSong] = useState(false);
+
+  // Estados para Modal de Gerenciar Cânticos
+  const [isManageSongsModalOpen, setIsManageSongsModalOpen] = useState(false);
+  const [manageSongsSearch, setManageSongsSearch] = useState('');
   // Save extraImages to IndexedDB when it changes
   useEffect(() => {
     const request = indexedDB.open('MakerStudioDB', 1);
@@ -129,6 +141,49 @@ export function Studio() {
     setIsAuthenticated(false);
   };
 
+  const handleNewSongSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newSongFiles.length === 0 || !newSongTitle || !newSongCategory) {
+      alert('Preencha os campos obrigatórios (Título, Categoria e Arquivos)');
+      return;
+    }
+    setIsSubmittingNewSong(true);
+    try {
+      const formData = new FormData();
+      formData.append('title', newSongTitle);
+      formData.append('category', newSongCategory);
+      // O backend já conta os slides com base na quantidade de imagens (files.length)
+      newSongFiles.forEach(file => {
+        formData.append('images', file);
+      });
+
+      await createOption(formData);
+      alert('Cântico criado com sucesso!');
+      setIsNewSongModalOpen(false);
+      setNewSongTitle('');
+      setNewSongCategory('LOUVOR');
+      setNewSongFiles([]);
+      fetchData();
+    } catch (error) {
+      console.error(error);
+      alert('Erro ao criar cântico.');
+    } finally {
+      setIsSubmittingNewSong(false);
+    }
+  };
+
+  const handleDeleteOption = async (id: string, title: string) => {
+    if (confirm(`Tem certeza que deseja apagar permanentemente o cântico "${title}"?`)) {
+      try {
+        await deleteOption(id);
+        fetchData(); // reload options
+      } catch (error) {
+        console.error(error);
+        alert('Erro ao apagar cântico.');
+      }
+    }
+  };
+
   if (!isAuthenticated) {
     return (
       <Login
@@ -171,7 +226,20 @@ export function Studio() {
             <div className="logo">
               <span className="logo-text">Estúdio Maker - ICC</span>
             </div>
-            <div className="header-buttons">
+            <div className="header-buttons" style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+              <button
+                className="btn btn-secondary btn-sm-text"
+                onClick={() => setIsManageSongsModalOpen(true)}
+                style={{ background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--color-border)', color: 'white' }}
+              >
+                Gerenciar Cânticos
+              </button>
+              <button
+                className="btn btn-primary btn-sm-text"
+                onClick={() => setIsNewSongModalOpen(true)}
+              >
+                + Novo Cântico
+              </button>
               <button
                 className="btn btn-secondary btn-sm-text"
                 onClick={handleLogout}
@@ -230,6 +298,161 @@ export function Studio() {
             </>
           )}
         </main>
+
+        {/* Modal Novo Cântico */}
+        {isNewSongModalOpen && (
+          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 9999, backdropFilter: 'blur(5px)' }}>
+            <div className="glass-panel" style={{ padding: '2rem', width: '90%', maxWidth: '500px', border: '1px solid var(--color-border)' }}>
+              <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem', color: 'white' }}>Adicionar Novo Cântico</h2>
+              <form onSubmit={handleNewSongSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>Título</label>
+                  <input
+                    type="text"
+                    value={newSongTitle}
+                    onChange={(e) => setNewSongTitle(e.target.value)}
+                    placeholder="Ex: 01 - Nome do Cântico"
+                    style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid var(--color-border)', background: 'rgba(255,255,255,0.05)', color: 'white' }}
+                    required
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>Categoria</label>
+                  <select
+                    value={newSongCategory}
+                    onChange={(e) => setNewSongCategory(e.target.value)}
+                    style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid var(--color-border)', background: 'rgba(255,255,255,0.05)', color: 'white' }}
+                  >
+                    <option value="LOUVOR" style={{ background: '#111' }}>LOUVOR</option>
+                    <option value="ADORACAO" style={{ background: '#111' }}>ADORAÇÃO</option>
+                    <option value="CEIA" style={{ background: '#111' }}>CEIA</option>
+                    <option value="DIZIMO" style={{ background: '#111' }}>DÍZIMO</option>
+                    <option value="INFANTIL" style={{ background: '#111' }}>INFANTIL</option>
+                    <option value="CORAL" style={{ background: '#111' }}>CORAL</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>Imagens (Slides)</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={(e) => {
+                      if (e.target.files) {
+                        const files = Array.from(e.target.files);
+                        setNewSongFiles(files);
+                      }
+                    }}
+                    style={{ width: '100%', color: 'white', marginBottom: '1rem' }}
+                    required={newSongFiles.length === 0}
+                  />
+                  
+                  {newSongFiles.length > 0 && (
+                    <div style={{ marginTop: '0.5rem' }}>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '1rem', padding: '0.5rem 1rem', background: 'rgba(34, 197, 94, 0.1)', border: '1px solid #22c55e', borderRadius: '0.5rem', marginBottom: '1rem' }}>
+                        <span style={{ fontSize: '0.875rem', color: '#4ade80', fontWeight: 'bold' }}>✓ {newSongFiles.length} slide(s) selecionado(s)</span>
+                        <button type="button" onClick={() => setNewSongFiles([])} style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', fontSize: '0.875rem', padding: 0 }}>Limpar</button>
+                      </div>
+                      
+                      <p style={{ margin: '0 0 0.5rem 0', color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>Arraste as imagens abaixo para reordenar os slides:</p>
+                      
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: '0.5rem', maxHeight: '30vh', overflowY: 'auto', paddingRight: '0.5rem' }}>
+                        {newSongFiles.map((file, i) => (
+                          <div
+                            key={i}
+                            draggable
+                            onDragStart={(e) => {
+                              setNewSongDraggedIndex(i);
+                              e.dataTransfer.effectAllowed = 'move';
+                            }}
+                            onDragOver={(e) => {
+                              e.preventDefault();
+                              setNewSongDragOverIndex(i);
+                            }}
+                            onDragEnd={() => {
+                              setNewSongDraggedIndex(null);
+                              setNewSongDragOverIndex(null);
+                            }}
+                            onDrop={(e) => {
+                              e.preventDefault();
+                              if (newSongDraggedIndex === null || newSongDraggedIndex === i) return;
+                              const newImages = [...newSongFiles];
+                              const draggedItem = newImages[newSongDraggedIndex];
+                              newImages.splice(newSongDraggedIndex, 1);
+                              newImages.splice(i, 0, draggedItem);
+                              setNewSongFiles(newImages);
+                              setNewSongDraggedIndex(null);
+                              setNewSongDragOverIndex(null);
+                            }}
+                            style={{
+                              background: '#000',
+                              borderRadius: '0.5rem',
+                              overflow: 'hidden',
+                              border: newSongDragOverIndex === i ? '2px solid var(--color-primary)' : '1px solid var(--color-border)',
+                              opacity: newSongDraggedIndex === i ? 0.5 : 1,
+                              cursor: 'grab',
+                              position: 'relative'
+                            }}
+                          >
+                            <img src={URL.createObjectURL(file)} alt="Slide" style={{ width: '100%', height: '70px', objectFit: 'cover', display: 'block', pointerEvents: 'none' }} />
+                            <div style={{ position: 'absolute', top: 0, left: 0, background: 'rgba(0,0,0,0.6)', color: 'white', padding: '0.1rem 0.4rem', fontSize: '0.7rem', borderBottomRightRadius: '0.5rem' }}>{i + 1}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+                  <button type="button" className="btn btn-secondary" onClick={() => setIsNewSongModalOpen(false)} style={{ flex: 1 }}>
+                    Cancelar
+                  </button>
+                  <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={isSubmittingNewSong}>
+                    {isSubmittingNewSong ? 'Salvando...' : 'Salvar Cântico'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Modal Gerenciar Cânticos */}
+        {isManageSongsModalOpen && (
+          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 9999, backdropFilter: 'blur(5px)' }}>
+            <div className="glass-panel" style={{ padding: '2rem', width: '90%', maxWidth: '600px', maxHeight: '80vh', border: '1px solid var(--color-border)', display: 'flex', flexDirection: 'column' }}>
+              <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem', color: 'white' }}>Gerenciar Cânticos</h2>
+              <input
+                type="text"
+                placeholder="Pesquisar cântico..."
+                value={manageSongsSearch}
+                onChange={(e) => setManageSongsSearch(e.target.value)}
+                style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid var(--color-border)', background: 'rgba(255,255,255,0.05)', color: 'white', marginBottom: '1rem' }}
+              />
+              <div style={{ overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '0.5rem', paddingRight: '0.5rem' }}>
+                {options
+                  .filter(opt => !manageSongsSearch || (opt.title || '').toLowerCase().includes(manageSongsSearch.toLowerCase()))
+                  .sort((a, b) => (a.title || '').localeCompare(b.title || ''))
+                  .map(opt => (
+                    <div key={opt._id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem', background: 'rgba(255,255,255,0.03)', borderRadius: '0.5rem', border: '1px solid var(--color-border)' }}>
+                      <span style={{ color: 'white' }}>{opt.title}</span>
+                      <button
+                        onClick={() => handleDeleteOption(opt._id, opt.title)}
+                        style={{ background: 'transparent', border: '1px solid #ef4444', color: '#ef4444', borderRadius: '0.5rem', cursor: 'pointer', padding: '0.25rem 0.5rem' }}
+                        title="Apagar Cântico"
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  ))}
+                {options.length === 0 && <p style={{ color: 'var(--color-text-muted)' }}>Nenhum cântico encontrado.</p>}
+              </div>
+              <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-end' }}>
+                <button type="button" className="btn btn-primary" onClick={() => setIsManageSongsModalOpen(false)}>
+                  Fechar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -238,9 +461,9 @@ export function Studio() {
   const selectedOptionsData = activeSelection.songs.map(id => options.find(opt => opt._id === id)).filter(Boolean) as Option[];
 
   const formatTitle = (rawTitle: string) => {
-    const match = rawTitle.match(/^(\d+)-(.*)$/);
+    const match = rawTitle.match(/^([^-]+)-(.*)$/);
     if (match) {
-      return { badge: match[1], name: match[2].trim() };
+      return { badge: match[1].trim(), name: match[2].trim() };
     }
     return { badge: 'Cânticos', name: rawTitle };
   };
@@ -448,9 +671,10 @@ export function Studio() {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                       {(opt.images || []).map((img, imgIndex) => {
                         const folderName = (opt.filePath || '').split('/').pop();
+                        const imgUrl = img.startsWith('http') ? img : `${BASE_URL}/static/${folderName}/${img}`;
                         return (
                           <div key={imgIndex} style={{ background: '#000', borderRadius: '0.5rem', overflow: 'hidden', border: '1px solid var(--color-border)' }}>
-                            <img src={`${BASE_URL}/static/${folderName}/${img}`} alt={`Capa`} style={{ width: '100%', display: 'block' }} loading="lazy" />
+                            <img src={imgUrl} alt={`Capa`} style={{ width: '100%', display: 'block' }} loading="lazy" />
                           </div>
                         );
                       })}

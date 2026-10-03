@@ -6,6 +6,7 @@ import { sendPresentationEmail } from '../services/emailService';
 import { getBirthdaysForNextWeek } from '../services/googleSheets';
 import { buildPresentationFiles } from '../services/presentationService';
 import { buildVideoBuffer } from './noticeController';
+import { uploadImage, deleteFolder } from '../services/cloudinaryService';
 
 const tempDir = path.join(__dirname, '../../temp');
 if (!fs.existsSync(tempDir)) {
@@ -39,6 +40,37 @@ export const getOptions = async (req: Request, res: Response) => {
   }
 };
 
+export const deleteOption = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const option = await Option.findById(id);
+    if (!option) {
+      return res.status(404).json({ message: 'Cântico não encontrado' });
+    }
+
+    const folderName = (option.get('filePath') || '').split('/').pop();
+
+    if (option.get('images') && option.get('images')[0]?.startsWith('http')) {
+      // Cloudinary deletion
+      if (folderName) {
+        await deleteFolder(folderName);
+      }
+    } else {
+      // Local deletion
+      const dirPath = path.resolve(__dirname, '../../', option.get('filePath'));
+      if (fs.existsSync(dirPath) && fs.statSync(dirPath).isDirectory()) {
+        fs.rmSync(dirPath, { recursive: true, force: true });
+      }
+    }
+
+    await Option.findByIdAndDelete(id);
+    res.json({ message: 'Cântico deletado com sucesso' });
+  } catch (e) {
+    const error = e as Error;
+    res.status(500).json({ message: error.message });
+  }
+};
+
 export const getBirthdaysList = async (req: Request, res: Response) => {
   try {
     const birthdays = await getBirthdaysForNextWeek();
@@ -53,18 +85,29 @@ export const getBirthdaysList = async (req: Request, res: Response) => {
 export const createOption = async (req: Request, res: Response) => {
   try {
     const { title, category, slidesCount } = req.body;
-    const file = req.file;
+    const files = req.files as Express.Multer.File[];
 
-    if (!file) {
-      return res.status(400).json({ message: 'Arquivo PPTX ou PNG é obrigatório' });
+    if (!files || files.length === 0) {
+      return res.status(400).json({ message: 'É obrigatório enviar pelo menos uma imagem.' });
+    }
+
+    // Gerar nome único para a pasta no Cloudinary
+    const folderName = `${Date.now()}-${title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}`;
+
+    const cloudUrls: string[] = [];
+
+    for (const file of files) {
+      const url = await uploadImage(file.path, folderName);
+      cloudUrls.push(url);
     }
 
     const newOption = new Option({
       title,
       category,
-      slidesCount: slidesCount ? parseInt(slidesCount) : 1,
-      filePath: file.path,
-      originalFileName: file.originalname,
+      slidesCount: slidesCount ? parseInt(slidesCount) : files.length,
+      filePath: `cloud/${folderName}`,
+      originalFileName: folderName,
+      images: cloudUrls,
     });
 
     const savedOption = await newOption.save();

@@ -31,6 +31,15 @@ export const createOption = async (formData: FormData): Promise<Option> => {
   return response.json();
 };
 
+export const deleteOption = async (id: string): Promise<void> => {
+  const response = await fetch(`${API_URL}/options/${id}`, {
+    method: 'DELETE',
+  });
+  if (!response.ok) {
+    throw new Error('Erro ao deletar opção');
+  }
+};
+
 export const generatePresentation = async (
   optionIds: string[],
   extraImages: File[] = [],

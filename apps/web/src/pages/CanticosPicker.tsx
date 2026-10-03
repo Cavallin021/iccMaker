@@ -30,9 +30,9 @@ export function CanticosPicker() {
   };
 
   const formatTitle = (rawTitle: string) => {
-    const match = rawTitle.match(/^(\d+)-(.*)$/);
+    const match = rawTitle.match(/^([^-]+)-(.*)$/);
     if (match) {
-      return { badge: match[1], name: match[2].trim() };
+      return { badge: match[1].trim(), name: match[2].trim() };
     }
     return { badge: 'Cânticos', name: rawTitle };
   };
@@ -96,7 +96,20 @@ export function CanticosPicker() {
         const lyricsMatch = normalizeText(opt.lyrics || '').includes(search);
         return titleMatch || lyricsMatch;
       })
-      .sort((a, b) => (a.title || '').localeCompare(b.title || '', undefined, { numeric: true }));
+      .sort((a, b) => {
+        const titleA = a.title || '';
+        const titleB = b.title || '';
+        const numA = parseInt(titleA.match(/^(\d+)/)?.[1] || '-1', 10);
+        const numB = parseInt(titleB.match(/^(\d+)/)?.[1] || '-1', 10);
+
+        if (!isNaN(numA) && numA !== -1 && !isNaN(numB) && numB !== -1) {
+          return numA - numB;
+        }
+        if (!isNaN(numA) && numA !== -1) return -1;
+        if (!isNaN(numB) && numB !== -1) return 1;
+
+        return titleA.localeCompare(titleB);
+      });
   }, [options, searchTerm]);
 
   if (!isAuthenticated) {
@@ -279,9 +292,10 @@ export function CanticosPicker() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                     {(opt.images || []).map((img, imgIndex) => {
                       const folderName = (opt.filePath || '').split('/').pop();
+                      const imgUrl = img.startsWith('http') ? img : `${BASE_URL}/static/${folderName}/${img}`;
                       return (
                         <div key={imgIndex} style={{ background: '#000', borderRadius: '0.5rem', overflow: 'hidden', border: '1px solid var(--color-border)' }}>
-                          <img src={`${BASE_URL}/static/${folderName}/${img}`} alt={`Capa ${imgIndex + 1}`} style={{ width: '100%', display: 'block' }} loading="lazy" />
+                          <img src={imgUrl} alt={`Capa ${imgIndex + 1}`} style={{ width: '100%', display: 'block' }} loading="lazy" />
                         </div>
                       );
                     })}

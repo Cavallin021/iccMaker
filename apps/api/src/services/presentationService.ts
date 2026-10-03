@@ -64,24 +64,46 @@ export const buildPresentationFiles = async (
     const option = await Option.findById(optionId);
     if (!option) return;
 
-    const dirPath = path.resolve(__dirname, '../../', option.filePath);
-    if (fs.existsSync(dirPath) && fs.statSync(dirPath).isDirectory()) {
-      const files = fs.readdirSync(dirPath);
-      const images = files.filter(f => {
-        const ext = path.extname(f).toLowerCase();
-        return ext === '.jpg' || ext === '.jpeg' || ext === '.png';
-      }).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-
-      for (const image of images) {
-        const imagePath = path.join(dirPath, image);
-
+    const imagesArray = option.get('images');
+    if (imagesArray && imagesArray.length > 0 && imagesArray[0].startsWith('http')) {
+      // Caso seja Cloudinary (URLs)
+      for (const imageUrl of imagesArray) {
         // Add to PPTX
         const slide = pptx.addSlide();
-        slide.addImage({ path: imagePath, x: 0, y: 0, w: '100%', h: '100%' });
+        slide.addImage({ path: imageUrl, x: 0, y: 0, w: '100%', h: '100%' });
 
         // Add to PDF
-        pdfDoc.addPage();
-        pdfDoc.image(imagePath, 0, 0, { width: 1920, height: 1080 });
+        try {
+          const response = await fetch(imageUrl);
+          const arrayBuffer = await response.arrayBuffer();
+          const buffer = Buffer.from(arrayBuffer);
+          pdfDoc.addPage();
+          pdfDoc.image(buffer, 0, 0, { width: 1920, height: 1080 });
+        } catch (error) {
+          console.error(`Erro ao baixar imagem do Cloudinary: ${imageUrl}`, error);
+        }
+      }
+    } else {
+      // Caso seja local
+      const dirPath = path.resolve(__dirname, '../../', option.get('filePath') || '');
+      if (fs.existsSync(dirPath) && fs.statSync(dirPath).isDirectory()) {
+        const files = fs.readdirSync(dirPath);
+        const images = files.filter(f => {
+          const ext = path.extname(f).toLowerCase();
+          return ext === '.jpg' || ext === '.jpeg' || ext === '.png';
+        }).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+
+        for (const image of images) {
+          const imagePath = path.join(dirPath, image);
+
+          // Add to PPTX
+          const slide = pptx.addSlide();
+          slide.addImage({ path: imagePath, x: 0, y: 0, w: '100%', h: '100%' });
+
+          // Add to PDF
+          pdfDoc.addPage();
+          pdfDoc.image(imagePath, 0, 0, { width: 1920, height: 1080 });
+        }
       }
     }
   };
