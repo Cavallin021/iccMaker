@@ -218,7 +218,7 @@ export const generatePreviewPdf = async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'É obrigatório selecionar cânticos para o preview.' });
     }
 
-    const { pdfBuffer, fileNameBase } = await buildPresentationFiles(optionIds, undefined, '', '');
+    const { pdfBuffer, fileNameBase } = await buildPresentationFiles(optionIds, undefined, '', '', true);
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');

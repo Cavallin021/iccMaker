@@ -14,7 +14,8 @@ export const buildPresentationFiles = async (
   optionIds: string[],
   extraImages: Express.Multer.File[] | undefined,
   preachTheme: string,
-  preachTitle: string
+  preachTitle: string,
+  skipPptx: boolean = false
 ): Promise<PresentationFiles> => {
   const pptx = new PptxGenJS();
   // Default 16:9 layout
@@ -50,8 +51,10 @@ export const buildPresentationFiles = async (
     const imagePath = path.resolve(__dirname, '../../public/template', fileName);
     if (fs.existsSync(imagePath)) {
       // Add to PPTX
-      const slide = pptx.addSlide();
-      slide.addImage({ path: imagePath, x: 0, y: 0, w: '100%', h: '100%' });
+      if (!skipPptx) {
+        const slide = pptx.addSlide();
+        slide.addImage({ path: imagePath, x: 0, y: 0, w: '100%', h: '100%' });
+      }
 
       // Add to PDF
       pdfDoc.addPage();
@@ -60,7 +63,8 @@ export const buildPresentationFiles = async (
   };
 
   // Helper para adicionar os slides de um bloco (Option)
-  const addBlockSlides = async (optionId: string) => {
+  const addBlockSlides = async (optionId: string | undefined) => {
+    if (!optionId) return;
     const option = await Option.findById(optionId);
     if (!option) return;
 
@@ -69,8 +73,10 @@ export const buildPresentationFiles = async (
       // Caso seja Cloudinary (URLs)
       for (const imageUrl of imagesArray) {
         // Add to PPTX
-        const slide = pptx.addSlide();
-        slide.addImage({ path: imageUrl, x: 0, y: 0, w: '100%', h: '100%' });
+        if (!skipPptx) {
+          const slide = pptx.addSlide();
+          slide.addImage({ path: imageUrl, x: 0, y: 0, w: '100%', h: '100%' });
+        }
 
         // Add to PDF
         try {
@@ -97,8 +103,10 @@ export const buildPresentationFiles = async (
           const imagePath = path.join(dirPath, image);
 
           // Add to PPTX
-          const slide = pptx.addSlide();
-          slide.addImage({ path: imagePath, x: 0, y: 0, w: '100%', h: '100%' });
+          if (!skipPptx) {
+            const slide = pptx.addSlide();
+            slide.addImage({ path: imagePath, x: 0, y: 0, w: '100%', h: '100%' });
+          }
 
           // Add to PDF
           pdfDoc.addPage();
@@ -115,8 +123,10 @@ export const buildPresentationFiles = async (
   if (extraImages && extraImages.length > 0) {
     for (const file of extraImages) {
       // Add to PPTX
-      const slide = pptx.addSlide();
-      slide.addImage({ path: file.path, x: 0, y: 0, w: '100%', h: '100%' });
+      if (!skipPptx) {
+        const slide = pptx.addSlide();
+        slide.addImage({ path: file.path, x: 0, y: 0, w: '100%', h: '100%' });
+      }
 
       // Add to PDF
       pdfDoc.addPage();
@@ -150,8 +160,11 @@ export const buildPresentationFiles = async (
   const slide6Path = path.resolve(__dirname, '../../public/template/static_6.jpg');
   if (fs.existsSync(slide6Path)) {
     // PPTX
-    const slide6 = pptx.addSlide();
-    slide6.addImage({ path: slide6Path, x: 0, y: 0, w: '100%', h: '100%' });
+    let slide6: any;
+    if (!skipPptx) {
+      slide6 = pptx.addSlide();
+      slide6.addImage({ path: slide6Path, x: 0, y: 0, w: '100%', h: '100%' });
+    }
 
     // PDF
     pdfDoc.addPage();
@@ -161,18 +174,20 @@ export const buildPresentationFiles = async (
     if (preachTheme || preachTitle) {
       const textToStamp = `${preachTheme}\n${preachTitle}`.trim();
 
-      // PPTX text (Posição em polegadas baseado no PPTX padrão de 10 x 5.625 e coords 0.75x, 1.99y, fonte 20)
-      slide6.addText(textToStamp, {
-        x: 0.75,
-        y: 1.97,
-        w: 4.75,
-        h: 0.84,
-        fontSize: 20,
-        bold: true,
-        color: 'FFFF00',
-        align: 'left',
-        valign: 'top',
-      });
+      // PPTX text
+      if (!skipPptx && slide6) {
+        slide6.addText(textToStamp, {
+          x: 0.75,
+          y: 1.97,
+          w: 4.75,
+          h: 0.84,
+          fontSize: 20,
+          bold: true,
+          color: 'FFFF00',
+          align: 'left',
+          valign: 'top',
+        });
+      }
 
       // PDF text (Posição convertida para 1920x1080 -> 10 pol = 1920px -> 1 pol = 192px)
       const px = 0.75 * 192; // 144
@@ -200,8 +215,8 @@ export const buildPresentationFiles = async (
   // Aguarda o PDF terminar de ser gerado em memória
   const pdfBuffer = await pdfPromise;
 
-  // Gerar o arquivo PPTX em memória
-  const pptxBuffer = await pptx.stream() as Buffer;
+  // Gerar o arquivo PPTX em memória (somente se não for pular)
+  const pptxBuffer = skipPptx ? Buffer.from([]) : (await pptx.stream() as Buffer);
 
   return {
     pdfBuffer,
