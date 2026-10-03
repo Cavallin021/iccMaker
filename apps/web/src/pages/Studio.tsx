@@ -24,9 +24,9 @@ export function Studio() {
   const [generationMessage, setGenerationMessage] = useState('');
   const [isDownloadingPreview, setIsDownloadingPreview] = useState(false);
 
-  // Estados para o Modal de Novo Cântico
   const [isNewSongModalOpen, setIsNewSongModalOpen] = useState(false);
-  const [newSongTitle, setNewSongTitle] = useState('');
+  const [newSongNumber, setNewSongNumber] = useState('');
+  const [newSongName, setNewSongName] = useState('');
   const [newSongCategory, setNewSongCategory] = useState('LOUVOR');
   const [newSongFiles, setNewSongFiles] = useState<File[]>([]);
   const [newSongDraggedIndex, setNewSongDraggedIndex] = useState<number | null>(null);
@@ -154,14 +154,26 @@ export function Studio() {
 
   const handleNewSongSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (newSongFiles.length === 0 || !newSongTitle || !newSongCategory) {
-      alert('Preencha os campos obrigatórios (Título, Categoria e Arquivos)');
+    if (newSongFiles.length === 0 || !newSongName || !newSongCategory) {
+      alert('Preencha os campos obrigatórios (Nome, Categoria e Arquivos)');
       return;
     }
+    
+    let formattedNumber = '+++';
+    if (newSongNumber.trim() !== '') {
+      const parsedNum = parseInt(newSongNumber.replace(/[^0-9]/g, ''), 10);
+      if (!isNaN(parsedNum)) {
+        formattedNumber = parsedNum.toString().padStart(3, '0');
+      } else {
+        formattedNumber = newSongNumber.trim();
+      }
+    }
+    const finalTitle = `${formattedNumber} - ${newSongName.trim()}`;
+
     setIsSubmittingNewSong(true);
     try {
       const formData = new FormData();
-      formData.append('title', newSongTitle);
+      formData.append('title', finalTitle);
       formData.append('category', newSongCategory);
       // O backend já conta os slides com base na quantidade de imagens (files.length)
       newSongFiles.forEach(file => {
@@ -171,7 +183,8 @@ export function Studio() {
       await createOption(formData);
       alert('Cântico criado com sucesso!');
       setIsNewSongModalOpen(false);
-      setNewSongTitle('');
+      setNewSongNumber('');
+      setNewSongName('');
       setNewSongCategory('LOUVOR');
       setNewSongFiles([]);
       fetchData();
@@ -316,16 +329,28 @@ export function Studio() {
             <div className="glass-panel" style={{ padding: '2rem', width: '90%', maxWidth: '500px', border: '1px solid var(--color-border)' }}>
               <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem', color: 'white' }}>Adicionar Novo Cântico</h2>
               <form onSubmit={handleNewSongSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                <div>
-                  <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>Título</label>
-                  <input
-                    type="text"
-                    value={newSongTitle}
-                    onChange={(e) => setNewSongTitle(e.target.value)}
-                    placeholder="Ex: 01 - Nome do Cântico"
-                    style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid var(--color-border)', background: 'rgba(255,255,255,0.05)', color: 'white' }}
-                    required
-                  />
+                <div style={{ display: 'flex', gap: '1rem' }}>
+                  <div style={{ width: '100px' }}>
+                    <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>Número</label>
+                    <input
+                      type="text"
+                      value={newSongNumber}
+                      onChange={(e) => setNewSongNumber(e.target.value)}
+                      placeholder="Ex: 001"
+                      style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid var(--color-border)', background: 'rgba(255,255,255,0.05)', color: 'white' }}
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>Nome do Cântico</label>
+                    <input
+                      type="text"
+                      value={newSongName}
+                      onChange={(e) => setNewSongName(e.target.value)}
+                      placeholder="Ex: O Grande Eu Sou"
+                      style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid var(--color-border)', background: 'rgba(255,255,255,0.05)', color: 'white' }}
+                      required
+                    />
+                  </div>
                 </div>
                 <div>
                   <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>Categoria</label>
