@@ -109,7 +109,7 @@ export function Studio() {
     try {
       setGenerationStatus('generating');
       setGenerationMessage('Montando slides e enviando e-mail... Por favor aguarde.');
-      const { status, fileNameBase } = await generatePresentation(activeSelection.songs, extraImages, preachTheme, preachTitle, false);
+      const { status } = await generatePresentation(activeSelection.songs, extraImages, preachTheme, preachTitle, false);
 
       // Marcar como processada na API
       await markSelectionProcessed(activeSelection._id);
