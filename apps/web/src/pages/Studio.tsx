@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { getOptions, getPendingSelections, generatePresentation, markSelectionProcessed, deleteSelection, getBirthdays, createOption, deleteOption, type Option, type Selection, type BirthdayPerson } from '../services/api';
+import { getOptions, getPendingSelections, generatePresentation, markSelectionProcessed, deleteSelection, getBirthdays, createOption, deleteOption, downloadPreviewPdf, type Option, type Selection, type BirthdayPerson } from '../services/api';
 import { Login } from '../components/Login';
 import { AvisosManager } from './Avisos';
 
@@ -23,6 +23,7 @@ export function Studio() {
   const [generationStatus, setGenerationStatus] = useState<'idle' | 'generating' | 'success' | 'error'>('idle');
   const [generationMessage, setGenerationMessage] = useState('');
   const [generatedFileName, setGeneratedFileName] = useState('');
+  const [isDownloadingPreview, setIsDownloadingPreview] = useState(false);
 
   // Estados para o Modal de Novo Cântico
   const [isNewSongModalOpen, setIsNewSongModalOpen] = useState(false);
@@ -139,6 +140,19 @@ export function Studio() {
   const handleLogout = () => {
     sessionStorage.removeItem('studio_password');
     setIsAuthenticated(false);
+  };
+
+  const handleDownloadPreview = async () => {
+    if (!activeSelection) return;
+    try {
+      setIsDownloadingPreview(true);
+      await downloadPreviewPdf(activeSelection.songs);
+    } catch (error) {
+      console.error(error);
+      alert('Erro ao baixar o PDF de preview.');
+    } finally {
+      setIsDownloadingPreview(false);
+    }
   };
 
   const handleNewSongSubmit = async (e: React.FormEvent) => {
@@ -478,6 +492,14 @@ export function Studio() {
           </div>
           <div className="header-buttons" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
             <button
+              className="btn btn-secondary btn-sm-text"
+              onClick={handleDownloadPreview}
+              disabled={isDownloadingPreview}
+              style={{ background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--color-border)', color: 'white' }}
+            >
+              {isDownloadingPreview ? 'Baixando...' : '⬇️ Baixar PDF da Preview'}
+            </button>
+            <button
               className="btn btn-primary btn-sm-text"
               disabled={generationStatus === 'generating'}
               onClick={handleGenerate}
@@ -741,26 +763,6 @@ export function Studio() {
 
             {generationStatus !== 'generating' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                <div style={{ display: 'flex', gap: '1rem' }}>
-                  <a
-                    href={`${BASE_URL}/api/options/download/${generatedFileName}.pdf`}
-                    download
-                    target="_blank"
-                    className="btn btn-secondary"
-                    style={{ flex: 1, textAlign: 'center', textDecoration: 'none' }}
-                  >
-                    📄 Baixar PDF
-                  </a>
-                  <a
-                    href={`${BASE_URL}/api/options/download/${generatedFileName}.pptx`}
-                    download
-                    target="_blank"
-                    className="btn btn-secondary"
-                    style={{ flex: 1, textAlign: 'center', textDecoration: 'none' }}
-                  >
-                    📊 Baixar PPTX
-                  </a>
-                </div>
                 <button className="btn btn-primary" onClick={() => {
                   setGenerationStatus('idle');
                   setActiveSelection(null);

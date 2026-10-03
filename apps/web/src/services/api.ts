@@ -76,6 +76,33 @@ export const generatePresentation = async (
   return { status: data.emailStatus, fileNameBase: data.fileNameBase };
 };
 
+export const downloadPreviewPdf = async (optionIds: string[]): Promise<void> => {
+  const response = await fetch(`${API_URL}/options/preview-pdf`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ optionIds }),
+  });
+  if (!response.ok) {
+    throw new Error('Erro ao baixar o PDF de preview');
+  }
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  
+  const disposition = response.headers.get('content-disposition');
+  let filename = 'Preview.pdf';
+  if (disposition && disposition.includes('filename=')) {
+    filename = disposition.split('filename=')[1].replace(/"/g, '');
+  }
+  
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  window.URL.revokeObjectURL(url);
+  document.body.removeChild(a);
+};
+
 export const verifyPassword = async (password: string, role: 'admin' | 'canticos') => {
   const response = await fetch(`${API_URL}/auth/verify`, {
     method: 'POST',

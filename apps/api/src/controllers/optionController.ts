@@ -210,6 +210,27 @@ export const generatePresentation = async (req: Request, res: Response) => {
   }
 };
 
+export const generatePreviewPdf = async (req: Request, res: Response) => {
+  try {
+    const { optionIds } = req.body;
+    
+    if (!optionIds || !Array.isArray(optionIds) || optionIds.length === 0) {
+      return res.status(400).json({ message: 'É obrigatório selecionar cânticos para o preview.' });
+    }
+
+    const { pdfBuffer, fileNameBase } = await buildPresentationFiles(optionIds, undefined, '', '');
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileNameBase}.pdf"`);
+    res.send(pdfBuffer);
+  } catch (e) {
+    const error = e as Error;
+    console.error('Erro no preview PDF:', error);
+    res.status(500).json({ message: 'Erro ao gerar preview em PDF', error: error.message });
+  }
+};
+
 export const downloadGeneratedFile = (req: Request, res: Response) => {
   try {
     const filename = req.params.filename as string;
