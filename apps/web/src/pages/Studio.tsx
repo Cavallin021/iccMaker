@@ -22,7 +22,6 @@ export function Studio() {
 
   const [generationStatus, setGenerationStatus] = useState<'idle' | 'generating' | 'success' | 'error'>('idle');
   const [generationMessage, setGenerationMessage] = useState('');
-  const [generatedFileName, setGeneratedFileName] = useState('');
   const [isDownloadingPreview, setIsDownloadingPreview] = useState(false);
 
   // Estados para o Modal de Novo Cântico
@@ -118,11 +117,9 @@ export function Studio() {
       if (status === 'success' || status === 'disabled') {
         localStorage.setItem('last_preach_theme', preachTheme);
         setGenerationStatus('success');
-        setGeneratedFileName(fileNameBase);
         setGenerationMessage('Sucesso! A apresentação foi enviada para o e-mail da igreja.');
       } else {
         setGenerationStatus('error');
-        setGeneratedFileName(fileNameBase);
         setGenerationMessage('Atenção: A apresentação foi gerada, mas houve uma falha no envio automático do e-mail. Por favor, avise o administrador da equipe.');
       }
     } catch (e) {
