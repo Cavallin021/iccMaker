@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { getOptions, createSelection, downloadPreviewPdf, type Option } from '../services/api';
 import { Login } from '../components/Login';
 
-const BASE_URL = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace(/\/api$/, '') : 'http://localhost:3001';
+const BASE_URL = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace(/\/api\/?$/, '') : 'http://localhost:3001';
 
 export function CanticosPicker() {
   const [options, setOptions] = useState<Option[]>([]);

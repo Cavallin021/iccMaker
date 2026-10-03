@@ -4,7 +4,7 @@ import { getOptions, getPendingSelections, generatePresentation, markSelectionPr
 import { Login } from '../components/Login';
 import { AvisosManager } from './Avisos';
 
-const BASE_URL = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace(/\/api$/, '') : 'http://localhost:3001';
+const BASE_URL = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace(/\/api\/?$/, '') : 'http://localhost:3001';
 
 export function Studio() {
   const [isAuthenticated, setIsAuthenticated] = useState(!!sessionStorage.getItem('studio_password'));
