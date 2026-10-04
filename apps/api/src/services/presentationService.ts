@@ -15,7 +15,8 @@ export const buildPresentationFiles = async (
   extraImages: Express.Multer.File[] | undefined,
   preachTheme: string,
   preachTitle: string,
-  skipPptx: boolean = false
+  skipPptx: boolean = false,
+  skipPdf: boolean = false
 ): Promise<PresentationFiles> => {
   const pptx = new PptxGenJS();
   // Default 16:9 layout
@@ -57,8 +58,10 @@ export const buildPresentationFiles = async (
       }
 
       // Add to PDF
-      pdfDoc.addPage();
-      pdfDoc.image(imagePath, 0, 0, { width: 1920, height: 1080 });
+      if (!skipPdf) {
+        pdfDoc.addPage();
+        pdfDoc.image(imagePath, 0, 0, { width: 1920, height: 1080 });
+      }
     }
   };
 
@@ -79,14 +82,16 @@ export const buildPresentationFiles = async (
         }
 
         // Add to PDF
-        try {
-          const response = await fetch(imageUrl);
-          const arrayBuffer = await response.arrayBuffer();
-          const buffer = Buffer.from(arrayBuffer);
-          pdfDoc.addPage();
-          pdfDoc.image(buffer, 0, 0, { width: 1920, height: 1080 });
-        } catch (error) {
-          console.error(`Erro ao baixar imagem do Cloudinary: ${imageUrl}`, error);
+        if (!skipPdf) {
+          try {
+            const response = await fetch(imageUrl);
+            const arrayBuffer = await response.arrayBuffer();
+            const buffer = Buffer.from(arrayBuffer);
+            pdfDoc.addPage();
+            pdfDoc.image(buffer, 0, 0, { width: 1920, height: 1080 });
+          } catch (error) {
+            console.error(`Erro ao baixar imagem do Cloudinary: ${imageUrl}`, error);
+          }
         }
       }
     } else {
@@ -109,8 +114,10 @@ export const buildPresentationFiles = async (
           }
 
           // Add to PDF
-          pdfDoc.addPage();
-          pdfDoc.image(imagePath, 0, 0, { width: 1920, height: 1080 });
+          if (!skipPdf) {
+            pdfDoc.addPage();
+            pdfDoc.image(imagePath, 0, 0, { width: 1920, height: 1080 });
+          }
         }
       }
     }
@@ -129,8 +136,10 @@ export const buildPresentationFiles = async (
       }
 
       // Add to PDF
-      pdfDoc.addPage();
-      pdfDoc.image(file.path, 0, 0, { width: 1920, height: 1080 });
+      if (!skipPdf) {
+        pdfDoc.addPage();
+        pdfDoc.image(file.path, 0, 0, { width: 1920, height: 1080 });
+      }
     }
   }
 
@@ -167,8 +176,10 @@ export const buildPresentationFiles = async (
     }
 
     // PDF
-    pdfDoc.addPage();
-    pdfDoc.image(slide6Path, 0, 0, { width: 1920, height: 1080 });
+    if (!skipPdf) {
+      pdfDoc.addPage();
+      pdfDoc.image(slide6Path, 0, 0, { width: 1920, height: 1080 });
+    }
 
     // Injeta o texto sobre o slide 6
     if (preachTheme || preachTitle) {
@@ -190,15 +201,17 @@ export const buildPresentationFiles = async (
       }
 
       // PDF text (Posição convertida para 1920x1080 -> 10 pol = 1920px -> 1 pol = 192px)
-      const px = 0.75 * 192; // 144
-      const py = 1.97 * 192; // ~378
-      pdfDoc.font('Helvetica-Bold')
-        .fontSize(53) // A fonte 20 do PPTX fica equivalente a ~53 no canvas gigante de 1920x1080
-        .fillColor('#FFFF00')
-        .text(textToStamp, px, py, {
-          align: 'left',
-          width: 4.75 * 192
-        });
+      if (!skipPdf) {
+        const px = 0.75 * 192; // 144
+        const py = 1.97 * 192; // ~378
+        pdfDoc.font('Helvetica-Bold')
+          .fontSize(53)
+          .fillColor('#FFFF00')
+          .text(textToStamp, px, py, {
+            align: 'left',
+            width: 4.75 * 192
+          });
+      }
     }
   }
 
@@ -210,10 +223,12 @@ export const buildPresentationFiles = async (
   // -----------------------------
 
   // Finaliza a geração do PDF
-  pdfDoc.end();
+  if (!skipPdf) {
+    pdfDoc.end();
+  }
 
   // Aguarda o PDF terminar de ser gerado em memória
-  const pdfBuffer = await pdfPromise;
+  const pdfBuffer = skipPdf ? Buffer.from([]) : await pdfPromise;
 
   // Gerar o arquivo PPTX em memória (somente se não for pular)
   const pptxBuffer = skipPptx ? Buffer.from([]) : (await pptx.stream() as Buffer);

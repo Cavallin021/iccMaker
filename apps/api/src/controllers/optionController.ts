@@ -147,66 +147,66 @@ export const generatePresentation = async (req: Request, res: Response) => {
     const preachTheme = req.body.preachTheme || '';
     const preachTitle = req.body.preachTitle || '';
 
-    // Utiliza o Service recém-criado para montar a apresentação
-    const { pdfBuffer, pptxBuffer, fileNameBase } = await buildPresentationFiles(
-      optionIds,
-      extraImages,
-      preachTheme,
-      preachTitle
-    );
-
-    // Tenta gerar o vídeo dos avisos, se houver falha não impede o envio do PPTX
-    let videoBuffer: Buffer | null = null;
-    try {
-      videoBuffer = await buildVideoBuffer();
-    } catch (e) {
-    const err = e as Error;
-      console.error('Erro ao gerar vídeo dos avisos durante a apresentação:', err.message);
-    }
-
-    let emailStatus = 'disabled';
-
-    // Dispara o envio de e-mail e aguarda (Síncrono)
-    if (process.env.RESEND_API_KEY && process.env.DESTINATION_EMAIL) {
-      try {
-        const videoName = fileNameBase.replace('Culto-', 'Avisos-') + '.mp4';
-        await sendPresentationEmail(pptxBuffer, `${fileNameBase}.pptx`, videoBuffer, videoBuffer ? videoName : undefined);
-        emailStatus = 'success';
-      } catch (e) {
-    const err = e as Error;
-        console.error('Erro ao enviar e-mail:', err.message);
-        emailStatus = 'failed';
-      }
-    }
-
-    // Limpar temps antigos
-    cleanupTempFiles();
-
-    // Salvar novos buffers em disco
-    const pdfPath = path.join(tempDir, `${fileNameBase}.pdf`);
-    const pptxPath = path.join(tempDir, `${fileNameBase}.pptx`);
-    fs.writeFileSync(pdfPath, pdfBuffer);
-    fs.writeFileSync(pptxPath, pptxBuffer);
-
+    // Responde imediatamente ao frontend para evitar timeout
     res.status(200).json({
-      message: 'Apresentação gerada com sucesso!',
-      fileNameBase,
-      emailStatus
+      message: 'Apresentação está sendo gerada e será enviada para o e-mail em alguns minutos!',
+      status: 'success'
     });
 
-    // Limpeza dos arquivos temporários extras do disco
-    if (extraImages && extraImages.length > 0) {
-      for (const file of extraImages) {
-        if (fs.existsSync(file.path)) {
-          fs.unlinkSync(file.path);
+    // Processamento pesado em segundo plano (Background)
+    setTimeout(async () => {
+      try {
+        console.log('Iniciando geração da apresentação em background...');
+        
+        // Passamos false para skipPptx e true para skipPdf (não precisamos do PDF no email)
+        const { pptxBuffer, fileNameBase } = await buildPresentationFiles(
+          optionIds,
+          extraImages,
+          preachTheme,
+          preachTitle,
+          false,
+          true
+        );
+
+        let videoBuffer: Buffer | null = null;
+        try {
+          videoBuffer = await buildVideoBuffer();
+        } catch (e) {
+          const err = e as Error;
+          console.error('Erro ao gerar vídeo dos avisos durante a apresentação:', err.message);
         }
+
+        if (process.env.RESEND_API_KEY && process.env.DESTINATION_EMAIL) {
+          try {
+            const videoName = fileNameBase.replace('Culto-', 'Avisos-') + '.mp4';
+            await sendPresentationEmail(pptxBuffer, `${fileNameBase}.pptx`, videoBuffer, videoBuffer ? videoName : undefined);
+            console.log('Email enviado com sucesso em background!');
+          } catch (e) {
+            const err = e as Error;
+            console.error('Erro ao enviar e-mail em background:', err.message);
+          }
+        }
+
+      } catch (err) {
+        console.error('Erro crítico no processamento em background da apresentação:', err);
+      } finally {
+        // Limpar temps antigos e imagens extras após terminar
+        cleanupTempFiles();
+        if (extraImages && extraImages.length > 0) {
+          for (const file of extraImages) {
+            if (fs.existsSync(file.path)) {
+              fs.unlinkSync(file.path);
+            }
+          }
+        }
+        console.log('Limpeza de arquivos temporários concluída.');
       }
-    }
+    }, 0);
 
   } catch (e) {
     const error = e as Error;
     console.error(error);
-    res.status(500).json({ message: 'Erro ao gerar apresentação', error: error.message });
+    res.status(500).json({ message: 'Erro ao iniciar geração', error: error.message });
   }
 };
 

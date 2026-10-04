@@ -117,7 +117,7 @@ export const buildVideoBuffer = async (): Promise<Buffer | null> => {
 
       filterComplex += `${concatInputs}concat=n=${activeNotices.length}:v=1:a=0[v]`;
 
-      const ffmpegCmd = `ffmpeg -y ${ffmpegInputs}-filter_complex "${filterComplex}" -map "[v]" -pix_fmt yuv420p -c:v libx264 "${outputPath}"`;
+      const ffmpegCmd = `ffmpeg -y ${ffmpegInputs}-filter_complex "${filterComplex}" -map "[v]" -pix_fmt yuv420p -c:v libx264 -crf 28 -preset veryfast "${outputPath}"`;
       
       exec(ffmpegCmd, (error, stdout, stderr) => {
         if (error) {
