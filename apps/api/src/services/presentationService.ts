@@ -11,6 +11,9 @@ export interface PresentationFiles {
   fileNameBase: string;
 }
 
+// Cache em memória para evitar baixar os mesmos templates várias vezes
+const templateCache = new Map<string, Buffer>();
+
 export const buildPresentationFiles = async (
   optionIds: string[],
   extraImages: Express.Multer.File[] | undefined,
@@ -63,12 +66,17 @@ export const buildPresentationFiles = async (
     let fallbackPath = path.resolve(__dirname, '../../public/template', fallbackFileName);
 
     if (customUrl) {
-      try {
-        const response = await fetch(customUrl);
-        const arrayBuffer = await response.arrayBuffer();
-        buffer = Buffer.from(arrayBuffer);
-      } catch (err) {
-        console.error(`Erro ao baixar template ${position} do Cloudinary:`, err);
+      if (templateCache.has(customUrl)) {
+        buffer = templateCache.get(customUrl)!;
+      } else {
+        try {
+          const response = await fetch(customUrl);
+          const arrayBuffer = await response.arrayBuffer();
+          buffer = Buffer.from(arrayBuffer);
+          templateCache.set(customUrl, buffer);
+        } catch (err) {
+          console.error(`Erro ao baixar template ${position} do Cloudinary:`, err);
+        }
       }
     }
 
@@ -203,12 +211,17 @@ export const buildPresentationFiles = async (
   let slide6FallbackPath = path.resolve(__dirname, '../../public/template/static_6.jpg');
 
   if (customUrl6) {
-    try {
-      const response = await fetch(customUrl6);
-      const arrayBuffer = await response.arrayBuffer();
-      slide6Buffer = Buffer.from(arrayBuffer);
-    } catch (err) {
-      console.error(`Erro ao baixar template 6 do Cloudinary:`, err);
+    if (templateCache.has(customUrl6)) {
+      slide6Buffer = templateCache.get(customUrl6)!;
+    } else {
+      try {
+        const response = await fetch(customUrl6);
+        const arrayBuffer = await response.arrayBuffer();
+        slide6Buffer = Buffer.from(arrayBuffer);
+        templateCache.set(customUrl6, slide6Buffer);
+      } catch (err) {
+        console.error(`Erro ao baixar template 6 do Cloudinary:`, err);
+      }
     }
   }
 

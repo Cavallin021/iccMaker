@@ -30,22 +30,27 @@ export const updateTemplate = async (req: Request, res: Response): Promise<void>
 
     const existing = await Template.findOne({ position: pos });
     
-    // Upload nova pro Cloudinary
-    const secureUrl = await uploadImage(req.file.path, 'templates');
-    fs.unlinkSync(req.file.path);
+    try {
+      // Upload nova pro Cloudinary
+      const secureUrl = await uploadImage(req.file.path, 'templates');
 
-    if (existing) {
-      // Deletar a antiga
-      if (existing.imageUrl.startsWith('http')) {
-        await deleteImage(existing.imageUrl);
+      if (existing) {
+        // Deletar a antiga
+        if (existing.imageUrl.startsWith('http')) {
+          await deleteImage(existing.imageUrl);
+        }
+        existing.imageUrl = secureUrl;
+        await existing.save();
+        res.json(existing);
+      } else {
+        const newTemp = new Template({ position: pos, imageUrl: secureUrl });
+        await newTemp.save();
+        res.status(201).json(newTemp);
       }
-      existing.imageUrl = secureUrl;
-      await existing.save();
-      res.json(existing);
-    } else {
-      const newTemp = new Template({ position: pos, imageUrl: secureUrl });
-      await newTemp.save();
-      res.status(201).json(newTemp);
+    } finally {
+      if (fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
     }
 
   } catch (e) {

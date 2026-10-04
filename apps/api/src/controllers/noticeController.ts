@@ -31,27 +31,30 @@ export const createNotice = async (req: Request, res: Response): Promise<void> =
 
     const { title, isRecurring, isActive, duration } = req.body;
     
-    // Upload to Cloudinary
-    const secureUrl = await uploadImage(req.file.path, 'avisos');
-    
-    // Delete temporary local file
-    fs.unlinkSync(req.file.path);
+    try {
+      // Upload to Cloudinary
+      const secureUrl = await uploadImage(req.file.path, 'avisos');
 
-    // Obter o maior "order" atual para colocar o novo aviso no fim da fila
-    const lastNotice = await Notice.findOne().sort({ order: -1 });
-    const nextOrder = lastNotice ? lastNotice.order + 1 : 0;
+      // Obter o maior "order" atual para colocar o novo aviso no fim da fila
+      const lastNotice = await Notice.findOne().sort({ order: -1 });
+      const nextOrder = lastNotice ? lastNotice.order + 1 : 0;
 
-    const newNotice = new Notice({
-      title: title || req.file.originalname,
-      filename: secureUrl, // Storing Cloudinary URL directly in filename
-      isRecurring: isRecurring === 'true' || isRecurring === true,
-      isActive: isActive !== undefined ? (isActive === 'true' || isActive === true) : true,
-      duration: duration ? parseInt(duration) : 10,
-      order: nextOrder
-    });
+      const newNotice = new Notice({
+        title: title || req.file.originalname,
+        filename: secureUrl, // Storing Cloudinary URL directly in filename
+        isRecurring: isRecurring === 'true' || isRecurring === true,
+        isActive: isActive !== undefined ? (isActive === 'true' || isActive === true) : true,
+        duration: duration ? parseInt(duration) : 10,
+        order: nextOrder
+      });
 
-    await newNotice.save();
-    res.status(201).json(newNotice);
+      await newNotice.save();
+      res.status(201).json(newNotice);
+    } finally {
+      if (fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
+    }
   } catch (e) {
     const error = e as Error;
     res.status(500).json({ message: 'Erro ao criar aviso', error: error.message });
@@ -135,11 +138,22 @@ export const buildVideoBuffer = async (): Promise<Buffer | null> => {
         if (error) {
           console.error('Erro no FFmpeg:', error);
           console.error('Stderr:', stderr);
+          if (fs.existsSync(outputPath)) {
+            try { fs.unlinkSync(outputPath); } catch (e) {}
+          }
           return reject(new Error('Erro ao gerar o vídeo.'));
         }
         
-        const videoBuffer = fs.readFileSync(outputPath);
-        resolve(videoBuffer);
+        try {
+          const videoBuffer = fs.readFileSync(outputPath);
+          resolve(videoBuffer);
+        } catch (e) {
+          reject(e);
+        } finally {
+          if (fs.existsSync(outputPath)) {
+            try { fs.unlinkSync(outputPath); } catch (e) {}
+          }
+        }
       });
     } catch (error) {
       reject(error);
