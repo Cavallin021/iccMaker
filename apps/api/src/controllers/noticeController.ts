@@ -3,6 +3,7 @@ import Notice from '../models/Notice';
 import path from 'path';
 import fs from 'fs';
 import { exec } from 'child_process';
+import { uploadImage, deleteImage } from '../services/cloudinaryService';
 
 const AVISOS_DIR = path.join(__dirname, '../../../avisos');
 
@@ -30,13 +31,19 @@ export const createNotice = async (req: Request, res: Response): Promise<void> =
 
     const { title, isRecurring, isActive, duration } = req.body;
     
+    // Upload to Cloudinary
+    const secureUrl = await uploadImage(req.file.path, 'avisos');
+    
+    // Delete temporary local file
+    fs.unlinkSync(req.file.path);
+
     // Obter o maior "order" atual para colocar o novo aviso no fim da fila
     const lastNotice = await Notice.findOne().sort({ order: -1 });
     const nextOrder = lastNotice ? lastNotice.order + 1 : 0;
 
     const newNotice = new Notice({
       title: title || req.file.originalname,
-      filename: req.file.filename,
+      filename: secureUrl, // Storing Cloudinary URL directly in filename
       isRecurring: isRecurring === 'true' || isRecurring === true,
       isActive: isActive !== undefined ? (isActive === 'true' || isActive === true) : true,
       duration: duration ? parseInt(duration) : 10,
@@ -79,10 +86,14 @@ export const deleteNotice = async (req: Request, res: Response): Promise<void> =
       return;
     }
 
-    // Remover arquivo físico
-    const filePath = path.join(AVISOS_DIR, notice.filename);
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
+    // Remover arquivo do Cloudinary se for URL, senão remove local (legado)
+    if (notice.filename.startsWith('http')) {
+      await deleteImage(notice.filename);
+    } else {
+      const filePath = path.join(AVISOS_DIR, notice.filename);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
     }
 
     res.json({ message: 'Aviso removido com sucesso.' });
@@ -107,7 +118,8 @@ export const buildVideoBuffer = async (): Promise<Buffer | null> => {
       let concatInputs = '';
 
       activeNotices.forEach((notice, index) => {
-        const imgPath = path.join(AVISOS_DIR, notice.filename).replace(/\\/g, '/');
+        // Usa a URL do Cloudinary diretamente, ou caminho local se for legado
+        const imgPath = notice.filename.startsWith('http') ? notice.filename : path.join(AVISOS_DIR, notice.filename).replace(/\\/g, '/');
         // Define framerate fixo para evitar problemas de fps, loop e duração
         ffmpegInputs += `-loop 1 -framerate 30 -t ${notice.duration} -i "${imgPath}" `;
         // Redimensiona mantendo proporção (letterbox) para garantir mesma resolução antes de concatenar

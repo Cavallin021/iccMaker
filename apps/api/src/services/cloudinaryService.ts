@@ -34,3 +34,19 @@ export const deleteFolder = async (folder: string): Promise<void> => {
     console.error(`Erro ao deletar pasta no Cloudinary (${folder}):`, error);
   }
 };
+
+export const deleteImage = async (url: string): Promise<void> => {
+  try {
+    // Extract public_id from Cloudinary URL
+    const urlParts = url.split('/');
+    const filename = urlParts[urlParts.length - 1];
+    const folder = urlParts[urlParts.length - 2];
+    const rootFolder = urlParts[urlParts.length - 3];
+    
+    // public_id is usually folder/filename (without extension)
+    const publicId = `${rootFolder}/${folder}/${filename.split('.')[0]}`;
+    await cloudinary.uploader.destroy(publicId);
+  } catch (error) {
+    console.error(`Erro ao deletar imagem no Cloudinary (${url}):`, error);
+  }
+};

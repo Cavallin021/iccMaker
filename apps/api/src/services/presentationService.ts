@@ -3,6 +3,7 @@ import path from 'path';
 import PptxGenJS from 'pptxgenjs';
 import PDFDocument from 'pdfkit';
 import Option from '../models/Option';
+import Template from '../models/Template';
 
 export interface PresentationFiles {
   pdfBuffer: Buffer;
@@ -47,20 +48,52 @@ export const buildPresentationFiles = async (
     pdfDoc.on('end', () => resolve(Buffer.concat(pdfChunks)));
   });
 
+  // Busca os templates customizados
+  const templates = await Template.find().lean();
+  const getTemplateUrl = (pos: number) => {
+    const t = templates.find(temp => temp.position === pos);
+    return t ? t.imageUrl : null;
+  };
+
   // Helper para adicionar slide estático
-  const addStaticSlide = (fileName: string) => {
-    const imagePath = path.resolve(__dirname, '../../public/template', fileName);
-    if (fs.existsSync(imagePath)) {
+  const addStaticSlide = async (position: number, fallbackFileName: string) => {
+    const customUrl = getTemplateUrl(position);
+    
+    let buffer: Buffer | null = null;
+    let fallbackPath = path.resolve(__dirname, '../../public/template', fallbackFileName);
+
+    if (customUrl) {
+      try {
+        const response = await fetch(customUrl);
+        const arrayBuffer = await response.arrayBuffer();
+        buffer = Buffer.from(arrayBuffer);
+      } catch (err) {
+        console.error(`Erro ao baixar template ${position} do Cloudinary:`, err);
+      }
+    }
+
+    if (buffer) {
       // Add to PPTX
       if (!skipPptx) {
         const slide = pptx.addSlide();
-        slide.addImage({ path: imagePath, x: 0, y: 0, w: '100%', h: '100%' });
+        const base64 = `data:image/jpeg;base64,${buffer.toString('base64')}`;
+        slide.addImage({ data: base64, x: 0, y: 0, w: '100%', h: '100%' });
       }
-
       // Add to PDF
       if (!skipPdf) {
         pdfDoc.addPage();
-        pdfDoc.image(imagePath, 0, 0, { width: 1920, height: 1080 });
+        pdfDoc.image(buffer, 0, 0, { width: 1920, height: 1080 });
+      }
+    } else if (fs.existsSync(fallbackPath)) {
+      // Add to PPTX
+      if (!skipPptx) {
+        const slide = pptx.addSlide();
+        slide.addImage({ path: fallbackPath, x: 0, y: 0, w: '100%', h: '100%' });
+      }
+      // Add to PDF
+      if (!skipPdf) {
+        pdfDoc.addPage();
+        pdfDoc.image(fallbackPath, 0, 0, { width: 1920, height: 1080 });
       }
     }
   };
@@ -125,7 +158,7 @@ export const buildPresentationFiles = async (
 
   // --- MONTAGEM DO MOLDE FIXO ---
   // Início: 2 Estáticos (com as imagens extras injetadas entre eles)
-  addStaticSlide('static_1.jpg');
+  await addStaticSlide(1, 'static_1.jpg');
 
   if (extraImages && extraImages.length > 0) {
     for (const file of extraImages) {
@@ -143,7 +176,7 @@ export const buildPresentationFiles = async (
     }
   }
 
-  addStaticSlide('static_2.jpg');
+  await addStaticSlide(2, 'static_2.jpg');
 
   // 3 Blocos
   await addBlockSlides(optionIds[0]);
@@ -151,34 +184,57 @@ export const buildPresentationFiles = async (
   await addBlockSlides(optionIds[2]);
 
   // 1 Estático
-  addStaticSlide('static_3.jpg');
+  await addStaticSlide(3, 'static_3.jpg');
 
   // 1 Bloco
   await addBlockSlides(optionIds[3]);
 
   // 2 Estáticos
-  addStaticSlide('static_4.jpg');
-  addStaticSlide('static_5.jpg');
+  await addStaticSlide(4, 'static_4.jpg');
+  await addStaticSlide(5, 'static_5.jpg');
 
   // 2 Blocos
   await addBlockSlides(optionIds[4]);
   await addBlockSlides(optionIds[5]);
 
   // 1 Estático (com o texto dinâmico injetado no 6)
-  // static_6.jpg
-  const slide6Path = path.resolve(__dirname, '../../public/template/static_6.jpg');
-  if (fs.existsSync(slide6Path)) {
+  const customUrl6 = getTemplateUrl(6);
+  let slide6Buffer: Buffer | null = null;
+  let slide6FallbackPath = path.resolve(__dirname, '../../public/template/static_6.jpg');
+
+  if (customUrl6) {
+    try {
+      const response = await fetch(customUrl6);
+      const arrayBuffer = await response.arrayBuffer();
+      slide6Buffer = Buffer.from(arrayBuffer);
+    } catch (err) {
+      console.error(`Erro ao baixar template 6 do Cloudinary:`, err);
+    }
+  }
+
+  const hasSlide6 = slide6Buffer !== null || fs.existsSync(slide6FallbackPath);
+
+  if (hasSlide6) {
     // PPTX
     let slide6: any;
     if (!skipPptx) {
       slide6 = pptx.addSlide();
-      slide6.addImage({ path: slide6Path, x: 0, y: 0, w: '100%', h: '100%' });
+      if (slide6Buffer) {
+        const base64 = `data:image/jpeg;base64,${slide6Buffer.toString('base64')}`;
+        slide6.addImage({ data: base64, x: 0, y: 0, w: '100%', h: '100%' });
+      } else {
+        slide6.addImage({ path: slide6FallbackPath, x: 0, y: 0, w: '100%', h: '100%' });
+      }
     }
 
     // PDF
     if (!skipPdf) {
       pdfDoc.addPage();
-      pdfDoc.image(slide6Path, 0, 0, { width: 1920, height: 1080 });
+      if (slide6Buffer) {
+        pdfDoc.image(slide6Buffer, 0, 0, { width: 1920, height: 1080 });
+      } else {
+        pdfDoc.image(slide6FallbackPath, 0, 0, { width: 1920, height: 1080 });
+      }
     }
 
     // Injeta o texto sobre o slide 6
@@ -219,7 +275,7 @@ export const buildPresentationFiles = async (
   await addBlockSlides(optionIds[6]);
 
   // 1 Estático Final
-  addStaticSlide('static_7.jpg');
+  await addStaticSlide(7, 'static_7.jpg');
   // -----------------------------
 
   // Finaliza a geração do PDF

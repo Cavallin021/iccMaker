@@ -207,7 +207,7 @@ export const AvisosManager: React.FC = () => {
                 {notices.map((notice, index) => {
                   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
                   const baseUrl = API_URL.replace('/api', '');
-                  const imgUrl = `${baseUrl}/avisos/${notice.filename}`;
+                  const imgUrl = notice.filename.startsWith('http') ? notice.filename : `${baseUrl}/avisos/${notice.filename}`;
 
                   return (
                     <div

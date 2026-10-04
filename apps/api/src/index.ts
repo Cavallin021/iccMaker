@@ -28,6 +28,7 @@ const connectDB = async () => {
 import optionRoutes from './routes/optionRoutes';
 import selectionRoutes from './routes/selectionRoutes';
 import noticeRoutes from './routes/noticeRoutes';
+import templateRoutes from './routes/templateRoutes';
 import path from 'path';
 
 app.get('/api/health', (req, res) => {
@@ -56,6 +57,7 @@ app.post('/api/auth/verify', (req, res) => {
 app.use('/api/options', optionRoutes);
 app.use('/api/selections', selectionRoutes);
 app.use('/api/notices', noticeRoutes);
+app.use('/api/templates', templateRoutes);
 
 connectDB().then(() => {
   app.listen(PORT, () => {

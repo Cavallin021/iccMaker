@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { getOptions, getPendingSelections, generatePresentation, markSelectionProcessed, deleteSelection, getBirthdays, createOption, deleteOption, downloadPreviewPdf, type Option, type Selection, type BirthdayPerson } from '../services/api';
 import { Login } from '../components/Login';
 import { AvisosManager } from './Avisos';
+import { TemplatesManager } from './Templates';
 
 const BASE_URL = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace(/\/api\/?$/, '') : 'http://localhost:3001';
 
@@ -48,6 +49,8 @@ export function Studio() {
     };
   }, [extraImages]);
 
+  const [templates, setTemplates] = useState<{ position: number, imageUrl: string }[]>([]);
+
   // Load extraImages from IndexedDB on mount
   useEffect(() => {
     const request = indexedDB.open('MakerStudioDB', 1);
@@ -76,6 +79,13 @@ export function Studio() {
       setOptions(opts);
       const sel = await getPendingSelections();
       setPendingSelections(sel);
+
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+      const tempRes = await fetch(`${API_URL}/templates`);
+      if (tempRes.ok) {
+        const temps = await tempRes.json();
+        setTemplates(temps);
+      }
     } catch (error) {
       console.error(error);
       alert('Erro ao buscar dados do estúdio');
@@ -687,6 +697,10 @@ export function Studio() {
           <div style={{ marginBottom: '2rem' }}>
             <AvisosManager />
           </div>
+
+          <div style={{ marginBottom: '2rem' }}>
+            <TemplatesManager />
+          </div>
         </main>
 
         <aside className="sidebar glass-panel sidebar-preview" style={{ borderRadius: 0, borderRight: 'none', borderBottom: 'none' }}>
@@ -696,14 +710,18 @@ export function Studio() {
           <div className="sidebar-scroll">
             {/* Helpers omitted for brevity in preview, just basic structure here */}
             {(() => {
-              const renderStatic = (num: number, label: string) => (
-                <div style={{ paddingLeft: '1rem', borderLeft: '3px solid var(--color-border)' }}>
-                  <h4 style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)', marginBottom: '0.5rem' }}>{label}</h4>
-                  <div style={{ background: '#000', borderRadius: '0.5rem', overflow: 'hidden', border: '1px dashed var(--color-border)' }}>
-                    <img src={`${BASE_URL}/template/static_${num}.jpg`} alt={`Estático ${num}`} style={{ width: '100%', display: 'block', opacity: 0.7 }} />
+              const renderStatic = (num: number, label: string) => {
+                const temp = templates.find(t => t.position === num);
+                const imgSrc = temp ? temp.imageUrl : `${BASE_URL}/template/static_${num}.jpg`;
+                return (
+                  <div style={{ paddingLeft: '1rem', borderLeft: '3px solid var(--color-border)' }}>
+                    <h4 style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)', marginBottom: '0.5rem' }}>{label}</h4>
+                    <div style={{ background: '#000', borderRadius: '0.5rem', overflow: 'hidden', border: '1px dashed var(--color-border)' }}>
+                      <img src={imgSrc} alt={`Estático ${num}`} style={{ width: '100%', display: 'block', opacity: 0.7 }} />
+                    </div>
                   </div>
-                </div>
-              );
+                );
+              };
 
               const renderBlock = (index: number) => {
                 const opt = selectedOptionsData[index];
