@@ -1,14 +1,20 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { getOptions, getPendingSelections, generatePresentation, markSelectionProcessed, deleteSelection, getBirthdays, createOption, deleteOption, downloadPreviewPdf, type Option, type Selection, type BirthdayPerson } from '../services/api';
+import { getOptions, getPendingSelections, generatePresentation, markSelectionProcessed, deleteSelection, getBirthdays, getPreaching, createOption, deleteOption, type Option, type Selection, type WeeklyAnniversaries } from '../services/api';
+import { PdfPreviewButton } from '../components/PdfPreviewButton';
 import { Login } from '../components/Login';
-import { AvisosManager } from './Avisos';
+import { AvisosManager, type NoticeSlide } from './Avisos';
 import { TemplatesManager } from './Templates';
 
 const BASE_URL = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace(/\/api\/?$/, '') : 'http://localhost:3001';
+const weddingMonth = new Intl.DateTimeFormat('pt-BR', { month: 'long', timeZone: 'UTC' });
 
 export function Studio() {
   const [isAuthenticated, setIsAuthenticated] = useState(!!sessionStorage.getItem('studio_password'));
+  const [noticeDuration, setNoticeDuration] = useState('10');
+  const [noticeSlides, setNoticeSlides] = useState<NoticeSlide[]>([]);
+  const [noticesReady, setNoticesReady] = useState(false);
+  const [savingNotices, setSavingNotices] = useState(false);
   const [options, setOptions] = useState<Option[]>([]);
   const [pendingSelections, setPendingSelections] = useState<Selection[]>([]);
 
@@ -19,11 +25,13 @@ export function Studio() {
   const [dragOverImageIndex, setDragOverImageIndex] = useState<number | null>(null);
   const [preachTheme, setPreachTheme] = useState(() => localStorage.getItem('last_preach_theme') || '');
   const [preachTitle, setPreachTitle] = useState('');
-  const [birthdays, setBirthdays] = useState<{ membros: BirthdayPerson[], dependentes: BirthdayPerson[] } | null>(null);
+  const [loadingPreaching, setLoadingPreaching] = useState(false);
+  const [preachingError, setPreachingError] = useState(false);
+  const preachingEdits = useRef({ theme: false, title: false });
+  const [birthdays, setBirthdays] = useState<WeeklyAnniversaries | null>(null);
 
   const [generationStatus, setGenerationStatus] = useState<'idle' | 'generating' | 'success' | 'error'>('idle');
   const [generationMessage, setGenerationMessage] = useState('');
-  const [isDownloadingPreview, setIsDownloadingPreview] = useState(false);
 
   const [isNewSongModalOpen, setIsNewSongModalOpen] = useState(false);
   const [newSongNumber, setNewSongNumber] = useState('');
@@ -66,13 +74,6 @@ export function Studio() {
     };
   }, []);
 
-  useEffect(() => {
-    if (isAuthenticated) {
-      fetchData();
-      loadBirthdays();
-    }
-  }, [isAuthenticated]);
-
   const fetchData = async () => {
     try {
       const opts = await getOptions();
@@ -101,6 +102,37 @@ export function Studio() {
     }
   };
 
+  useEffect(() => {
+    if (isAuthenticated) {
+      void Promise.resolve().then(() => Promise.all([fetchData(), loadBirthdays()]));
+    }
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !activeSelection) return;
+
+    const controller = new AbortController();
+    getPreaching(controller.signal).then(({ theme, title }) => {
+      if (controller.signal.aborted) return;
+      if (!preachingEdits.current.theme) setPreachTheme(theme);
+      if (!preachingEdits.current.title) setPreachTitle(title);
+    }).catch(() => {
+      if (!controller.signal.aborted) setPreachingError(true);
+    }).finally(() => {
+      if (!controller.signal.aborted) setLoadingPreaching(false);
+    });
+    return () => controller.abort();
+  }, [activeSelection, isAuthenticated]);
+
+  const handleOpenSelection = (selection: Selection) => {
+    preachingEdits.current = { theme: false, title: false };
+    setPreachTheme(localStorage.getItem('last_preach_theme') || '');
+    setPreachTitle('');
+    setPreachingError(false);
+    setLoadingPreaching(true);
+    setActiveSelection(selection);
+  };
+
   const handleDeleteSelection = async (id: string) => {
     if (confirm('Tem certeza que deseja deletar esta seleção?')) {
       try {
@@ -114,24 +146,21 @@ export function Studio() {
   };
 
   const handleGenerate = async () => {
-    if (!activeSelection) return;
+    if (!activeSelection || !noticesReady || savingNotices || loadingPreaching) return;
 
+    const slidesInVideo = noticeSlides.filter(slide => slide.isActive);
     try {
       setGenerationStatus('generating');
       setGenerationMessage('Montando slides e enviando e-mail... Por favor aguarde.');
-      const { status } = await generatePresentation(activeSelection.songs, extraImages, preachTheme, preachTitle, false);
-
-      // Marcar como processada na API
+      const deliveryMessage = await generatePresentation(
+        activeSelection.songs, extraImages, preachTheme, preachTitle, false,
+        Number(noticeDuration), slidesInVideo.map(slide => slide.image instanceof File ? slide.image : slide.id)
+      );
+      setNoticeSlides(current => current.filter(slide => typeof slide.image === 'string'));
       await markSelectionProcessed(activeSelection._id);
-
-      if (status === 'success' || status === 'disabled') {
-        localStorage.setItem('last_preach_theme', preachTheme);
-        setGenerationStatus('success');
-        setGenerationMessage('Sucesso! A apresentação foi enviada para o e-mail da igreja.');
-      } else {
-        setGenerationStatus('error');
-        setGenerationMessage('Atenção: A apresentação foi gerada, mas houve uma falha no envio automático do e-mail. Por favor, avise o administrador da equipe.');
-      }
+      localStorage.setItem('last_preach_theme', preachTheme);
+      setGenerationStatus('success');
+      setGenerationMessage(deliveryMessage);
     } catch (e) {
     const error = e as Error;
       console.error(error);
@@ -147,19 +176,6 @@ export function Studio() {
   const handleLogout = () => {
     sessionStorage.removeItem('studio_password');
     setIsAuthenticated(false);
-  };
-
-  const handleDownloadPreview = async () => {
-    if (!activeSelection) return;
-    try {
-      setIsDownloadingPreview(true);
-      await downloadPreviewPdf(activeSelection.songs);
-    } catch (error) {
-      console.error(error);
-      alert('Erro ao baixar o PDF de preview.');
-    } finally {
-      setIsDownloadingPreview(false);
-    }
   };
 
   const handleNewSongSubmit = async (e: React.FormEvent) => {
@@ -318,7 +334,7 @@ export function Studio() {
                         Criada em: {new Date(sel.createdAt).toLocaleDateString()} às {new Date(sel.createdAt).toLocaleTimeString()}
                       </p>
                       <div style={{ display: 'flex', gap: '0.5rem' }}>
-                        <button className="btn btn-primary" onClick={() => setActiveSelection(sel)} style={{ flex: 1, padding: '0.5rem' }}>
+                        <button className="btn btn-primary" onClick={() => handleOpenSelection(sel)} style={{ flex: 1, padding: '0.5rem' }}>
                           Abrir para Edição
                         </button>
                         <button onClick={() => handleDeleteSelection(sel._id)} style={{ padding: '0.5rem', background: 'transparent', border: '1px solid #ef4444', color: '#ef4444', borderRadius: '0.5rem', cursor: 'pointer' }} title="Deletar Seleção">
@@ -523,17 +539,14 @@ export function Studio() {
             <span className="logo-text">Voltar às seleções</span>
           </div>
           <div className="header-buttons" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <button
+            <PdfPreviewButton
+              optionIds={activeSelection.songs}
               className="btn btn-secondary btn-sm-text"
-              onClick={handleDownloadPreview}
-              disabled={isDownloadingPreview}
               style={{ background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--color-border)', color: 'white' }}
-            >
-              {isDownloadingPreview ? 'Baixando...' : '⬇️ Baixar PDF da Preview'}
-            </button>
+            />
             <button
               className="btn btn-primary btn-sm-text"
-              disabled={generationStatus === 'generating'}
+              disabled={generationStatus === 'generating' || !noticesReady || savingNotices || loadingPreaching}
               onClick={handleGenerate}
             >
               {generationStatus === 'generating' ? 'Processando...' : 'Gerar Apresentação'}
@@ -635,18 +648,26 @@ export function Studio() {
 
           <div style={{ marginBottom: '2rem', padding: '1.5rem', background: 'rgba(255, 255, 255, 0.03)', borderRadius: '0.5rem', border: '1px solid var(--color-border)' }}>
             <h2 style={{ fontSize: '1.25rem', marginBottom: '1rem' }}>Mensagem / Pregação (Opcional)</h2>
+            {loadingPreaching && <p role="status">Buscando a pregação na planilha…</p>}
+            {preachingError && <p role="status">Não foi possível carregar a pregação. Você pode preencher os campos manualmente.</p>}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <div>
                 <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>Tema da Pregação</label>
                 <input
-                  type="text" value={preachTheme} onChange={(e) => setPreachTheme(e.target.value)}
+                  type="text" value={preachTheme} onChange={(e) => {
+                    preachingEdits.current.theme = true;
+                    setPreachTheme(e.target.value);
+                  }}
                   style={{ width: '100%', padding: '0.75rem 1rem', borderRadius: '0.5rem', border: '1px solid var(--color-border)', background: 'rgba(255,255,255,0.05)', color: 'white', outline: 'none' }}
                 />
               </div>
               <div>
                 <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>Título da Mensagem</label>
                 <input
-                  type="text" value={preachTitle} onChange={(e) => setPreachTitle(e.target.value)}
+                  type="text" value={preachTitle} onChange={(e) => {
+                    preachingEdits.current.title = true;
+                    setPreachTitle(e.target.value);
+                  }}
                   style={{ width: '100%', padding: '0.75rem 1rem', borderRadius: '0.5rem', border: '1px solid var(--color-border)', background: 'rgba(255,255,255,0.05)', color: 'white', outline: 'none' }}
                 />
               </div>
@@ -657,7 +678,7 @@ export function Studio() {
             <h2 style={{ fontSize: '1.25rem', marginBottom: '1rem' }}>Aniversariantes da Semana (Dom a Sáb)</h2>
 
             {birthdays ? (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 11rem), 1fr))', gap: '1.5rem' }}>
                 <div>
                   <h3 style={{ fontSize: '1rem', color: 'var(--color-primary)', marginBottom: '0.5rem' }}>Membros</h3>
                   {birthdays.membros.length > 0 ? (
@@ -688,6 +709,24 @@ export function Studio() {
                     <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>Nenhum dependente aniversariante nesta semana.</p>
                   )}
                 </div>
+
+                <div>
+                  <h3 style={{ fontSize: '1rem', color: 'var(--color-primary)', marginBottom: '0.5rem' }}>Casamentos</h3>
+                  {birthdays.casamentos == null ? (
+                    <p role="alert" style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>Não foi possível consultar os aniversários de casamento.</p>
+                  ) : birthdays.casamentos.length === 0 ? (
+                    <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>Nenhum aniversário de casamento nesta semana.</p>
+                  ) : (
+                    <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                      {birthdays.casamentos.map(({ casal, date, anos, bodas }, index) => (
+                        <li key={`${casal}-${date}-${index}`} style={{ marginBottom: '0.5rem', fontSize: '0.9rem' }}>
+                          <strong style={{ color: 'var(--color-text-muted)' }}>{date}</strong> - {casal}
+                          {' → '}{bodas && `Bodas de ${bodas} · `}{anos} {anos === 1 ? 'ano' : 'anos'}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
               </div>
             ) : (
               <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>Buscando aniversariantes da planilha...</p>
@@ -695,7 +734,7 @@ export function Studio() {
           </div>
 
           <div style={{ marginBottom: '2rem' }}>
-            <AvisosManager />
+            <AvisosManager duration={noticeDuration} onDurationChange={setNoticeDuration} slides={noticeSlides} setSlides={setNoticeSlides} onReady={setNoticesReady} onSavingChange={setSavingNotices} />
           </div>
 
           <div style={{ marginBottom: '2rem' }}>
@@ -745,6 +784,7 @@ export function Studio() {
                 );
               };
 
+              const birthdaySlides = birthdays?.slidesAniversariantes;
               return (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', padding: '1.5rem' }}>
                   {renderStatic(1, "Aviso 1")}
@@ -760,6 +800,48 @@ export function Studio() {
                       </div>
                     </div>
                   )}
+                  {birthdaySlides?.pages.map((cards, page) => (
+                    <div key={page} className="wedding-preview">
+                      <h4 className="wedding-preview-label">
+                        Aniversariantes{birthdaySlides.pages.length > 1 ? ` (${page + 1})` : ''}
+                      </h4>
+                      <div className="birthday-preview-slide">
+                        <img className="birthday-preview-background" src={`${BASE_URL}/template/aniversariantes-fundo.png`} alt="" loading="lazy" />
+                        <span className="birthday-preview-heading">Aniversariantes da semana</span>
+                        <span className="birthday-preview-period">{birthdaySlides.period}</span>
+                        <div className="birthday-preview-cards">
+                          {cards.map(({ name, day, month, weekday, gender }, index) => {
+                            const style = gender === 'F' ? 'f' : gender === 'M' ? 'm' : 'neutro';
+                            return (
+                              <div className={`birthday-preview-card birthday-preview-card-${style}`} key={`${name}-${index}`}>
+                                <img src={`${BASE_URL}/template/aniversariantes-card-${style}.png`} alt="" loading="lazy" />
+                                <span className="birthday-preview-day">{day}</span>
+                                <span className={month.length >= 8 ? 'birthday-preview-month birthday-preview-month-long' : 'birthday-preview-month'}>{month}</span>
+                                <span className="birthday-preview-name">{name}</span>
+                                <span className="birthday-preview-weekday">{weekday}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {birthdays?.casamentos?.map(({ casal, date, anos, bodas }, index) => {
+                    const [day, month] = date.split('/');
+                    const monthName = weddingMonth.format(new Date(Date.UTC(2000, Number(month) - 1, 1)));
+                    const years = `${anos} ${anos === 1 ? 'ANO' : 'ANOS'}`;
+                    return (
+                      <div key={`${casal}-${date}-${index}`} className="wedding-preview">
+                        <h4 className="wedding-preview-label">Bodas</h4>
+                        <div className="wedding-preview-slide">
+                          <img src={`${BASE_URL}/template/bodas.png`} alt="" loading="lazy" />
+                          <span className="wedding-preview-couple">{casal}</span>
+                          <span className="wedding-preview-title">{bodas ? `BODAS DE ${bodas} - ${years}` : `${years} DE CASAMENTO`}</span>
+                          <span className="wedding-preview-date">{day} / {monthName}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
                   {renderStatic(2, "Aviso 2")}
                   {renderBlock(0)}
                   {renderBlock(1)}

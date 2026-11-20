@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Belleza&family=Dancing+Script:wght@700&family=Inter:wght@300;400;500;600;700&display=swap');
 
 :root {
   /* Color Palette */
@@ -493,4 +493,180 @@ p {
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--color-primary);
+}
+.notice-manager-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 1.5rem;
+}
+
+.wedding-preview {
+  padding-left: 1rem;
+  border-left: 3px solid var(--color-border);
+}
+
+.wedding-preview-label {
+  margin-bottom: 0.5rem;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
+
+.wedding-preview-slide {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  container-type: inline-size;
+  border: 1px solid var(--color-border);
+  border-radius: 0.5rem;
+  background: #f5f5ed;
+  color: #2e2c1c;
+}
+
+.wedding-preview-slide img {
+  display: block;
+  width: 100%;
+}
+
+.wedding-preview-slide span {
+  position: absolute;
+  left: 26%;
+  width: 48%;
+  transform: translateY(-50%);
+  font: 2.08cqw / 1.1 Belleza, sans-serif;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.wedding-preview-slide .wedding-preview-couple {
+  top: 53.3%;
+  font: 700 5.42cqw / 1 'Dancing Script', cursive;
+}
+
+.wedding-preview-title {
+  top: 69.6%;
+  text-transform: uppercase;
+}
+
+.wedding-preview-date {
+  top: 75.6%;
+  text-transform: uppercase;
+}
+
+@media (min-width: 768px) {
+  .notice-manager-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  }
+}
+
+.birthday-preview-slide {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  container-type: inline-size;
+  border-radius: 0.5rem;
+  background: #1c1838;
+  color: #fff;
+  font-family: Arial, sans-serif;
+}
+
+.birthday-preview-background,
+.birthday-preview-card img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.birthday-preview-heading,
+.birthday-preview-period {
+  position: absolute;
+  left: 4.5%;
+  right: 4.5%;
+  text-align: center;
+  font-weight: 700;
+}
+
+.birthday-preview-heading {
+  top: 6%;
+  font-size: 3.96cqw;
+}
+
+.birthday-preview-period {
+  top: 15.35%;
+  color: #c9c4e8;
+  font-size: 2.29cqw;
+}
+
+.birthday-preview-cards {
+  position: absolute;
+  inset: 26.6667% 0 auto;
+  height: 57.33%;
+  display: flex;
+  justify-content: center;
+  gap: 3.6%;
+}
+
+.birthday-preview-card {
+  --birthday-accent: #6858a9;
+  position: relative;
+  flex: 0 0 21.075%;
+  text-align: center;
+}
+
+.birthday-preview-card-f { --birthday-accent: #e8467f; }
+.birthday-preview-card-m { --birthday-accent: #2f7bea; }
+
+.birthday-preview-card span {
+  position: absolute;
+  display: grid;
+  align-content: center;
+  line-height: 1;
+  overflow-wrap: anywhere;
+}
+
+.birthday-preview-day,
+.birthday-preview-month {
+  left: 19%;
+  width: 62%;
+  color: var(--birthday-accent);
+  font-weight: 700;
+}
+
+.birthday-preview-day {
+  top: 12%;
+  height: 22.4%;
+  font-size: 6.15cqw;
+}
+
+.birthday-preview-month {
+  top: 33%;
+  height: 8%;
+  font-size: 1.98cqw;
+}
+
+.birthday-preview-month.birthday-preview-month-long {
+  font-size: 1.736cqw;
+}
+
+.birthday-preview-name,
+.birthday-preview-weekday {
+  left: 9%;
+  width: 82%;
+}
+
+.birthday-preview-name {
+  top: 54.4%;
+  height: 25.6%;
+  font-size: 2.5cqw;
+  font-weight: 700;
+}
+
+.birthday-preview-weekday {
+  top: 83.5%;
+  height: 10.7%;
+  color: #1c1838;
+  font-family: 'Arial Black', Arial, sans-serif;
+  font-size: 1.389cqw;
+  font-weight: 900;
 }

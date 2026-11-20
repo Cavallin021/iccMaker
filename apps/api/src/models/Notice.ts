@@ -4,6 +4,7 @@ export interface INotice extends Document {
   title: string;
   filename: string;
   isRecurring: boolean;
+  expiresAfterPresentation?: boolean;
   isActive: boolean;
   order: number;
   duration: number; // Duration in seconds
@@ -14,6 +15,7 @@ const NoticeSchema: Schema = new Schema({
   title: { type: String, default: '' },
   filename: { type: String, required: true },
   isRecurring: { type: Boolean, default: false },
+  expiresAfterPresentation: { type: Boolean },
   isActive: { type: Boolean, default: true },
   order: { type: Number, default: 0 },
   duration: { type: Number, default: 10 },

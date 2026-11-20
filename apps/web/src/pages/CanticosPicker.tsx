@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { getOptions, createSelection, downloadPreviewPdf, type Option } from '../services/api';
+import { getOptions, createSelection, type Option } from '../services/api';
+import { PdfPreviewButton } from '../components/PdfPreviewButton';
 import { Login } from '../components/Login';
 
 const BASE_URL = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace(/\/api\/?$/, '') : 'http://localhost:3001';
@@ -12,13 +13,6 @@ export function CanticosPicker() {
 
   const [isAuthenticated, setIsAuthenticated] = useState(!!sessionStorage.getItem('canticos_password'));
   const [isSending, setIsSending] = useState(false);
-  const [isDownloading, setIsDownloading] = useState(false);
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      fetchOptions();
-    }
-  }, [isAuthenticated]);
 
   const fetchOptions = async () => {
     try {
@@ -29,6 +23,12 @@ export function CanticosPicker() {
       alert('Erro ao buscar opções');
     }
   };
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      void Promise.resolve().then(fetchOptions);
+    }
+  }, [isAuthenticated]);
 
   const formatTitle = (rawTitle: string) => {
     const match = rawTitle.match(/^([^-]+)-(.*)$/);
@@ -74,23 +74,6 @@ export function CanticosPicker() {
       alert(error.message || 'Erro ao enviar cânticos.');
     } finally {
       setIsSending(false);
-    }
-  };
-
-  const handleDownloadPreview = async () => {
-    const filledOptions = selectedOptions.filter(Boolean) as string[];
-    if (filledOptions.length === 0) {
-      alert('Selecione pelo menos um cântico para baixar o preview.');
-      return;
-    }
-    try {
-      setIsDownloading(true);
-      await downloadPreviewPdf(filledOptions);
-    } catch (error) {
-      console.error(error);
-      alert('Erro ao baixar o PDF de preview.');
-    } finally {
-      setIsDownloading(false);
     }
   };
 
@@ -284,14 +267,11 @@ export function CanticosPicker() {
               <p style={{ fontSize: '0.875rem', margin: '0.5rem 0 0 0' }}>Ordem dos {selectedOptions.filter(Boolean).length}/7 cânticos selecionados</p>
             </div>
             
-            <button
-              onClick={handleDownloadPreview}
-              disabled={selectedOptions.filter(Boolean).length === 0 || isDownloading}
-              className={selectedOptions.filter(Boolean).length > 0 ? "btn btn-primary" : "btn btn-disabled"}
+            <PdfPreviewButton
+              optionIds={selectedOptions.filter((id): id is string => id !== null)}
+              className={selectedOptions.some(Boolean) ? 'btn btn-primary' : 'btn btn-disabled'}
               style={{ padding: '0.75rem', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem' }}
-            >
-              {isDownloading ? 'Gerando PDF...' : '⬇️ Baixar PDF da Preview'}
-            </button>
+            />
           </div>
 
           <div className="sidebar-scroll" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>

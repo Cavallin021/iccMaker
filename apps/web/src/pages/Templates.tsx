@@ -12,10 +12,6 @@ export const TemplatesManager: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [uploadingPos, setUploadingPos] = useState<number | null>(null);
 
-  useEffect(() => {
-    fetchTemplates();
-  }, []);
-
   const fetchTemplates = async () => {
     try {
       setLoading(true);
@@ -31,6 +27,10 @@ export const TemplatesManager: React.FC = () => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    void Promise.resolve().then(fetchTemplates);
+  }, []);
 
   const handleUpload = async (position: number, file: File) => {
     try {

@@ -45,8 +45,10 @@ export const generatePresentation = async (
   extraImages: File[] = [],
   preachTheme: string = '',
   preachTitle: string = '',
-  includeBirthdays: boolean = false
-): Promise<{ status: string; fileNameBase: string }> => {
+  includeBirthdays: boolean = false,
+  noticeDuration: number = 10,
+  noticeSlides?: (string | File)[]
+): Promise<string> => {
   const password = sessionStorage.getItem('studio_password') || '';
   
   const formData = new FormData();
@@ -54,6 +56,17 @@ export const generatePresentation = async (
   formData.append('preachTheme', preachTheme);
   formData.append('preachTitle', preachTitle);
   formData.append('includeBirthdays', String(includeBirthdays));
+  formData.append('noticeDuration', String(noticeDuration));
+
+  if (noticeSlides) {
+    let temporaryIndex = 0;
+    const order = noticeSlides.map(slide => {
+      if (typeof slide === 'string') return slide;
+      formData.append('temporaryNotices', slide);
+      return temporaryIndex++;
+    });
+    formData.append('noticeOrder', JSON.stringify(order));
+  }
 
   extraImages.forEach((file) => {
     formData.append('extraImages', file);
@@ -72,35 +85,29 @@ export const generatePresentation = async (
     throw new Error(errorData.message || 'Erro ao gerar apresentação');
   }
 
-  const data = await response.json();
-  return { status: data.emailStatus, fileNameBase: data.fileNameBase };
+  const { jobId } = await response.json();
+  for (let attempt = 0; attempt < 300; attempt++) {
+    await new Promise(resolve => window.setTimeout(resolve, 3000));
+    const result = await fetch(`${API_URL}/options/generate/${jobId}`, {
+      headers: { 'x-studio-password': password },
+      cache: 'no-store',
+    });
+    const job = await result.json();
+    if (!result.ok || job.status === 'error') throw new Error(job.message || 'Erro ao gerar apresentação');
+    if (job.status === 'success') return job.message || 'A apresentação foi enviada para o e-mail da igreja.';
+  }
+  throw new Error('A apresentação ainda está em processamento. Confira o e-mail antes de tentar novamente.');
 };
 
-export const downloadPreviewPdf = async (optionIds: string[]): Promise<void> => {
+export const generatePreviewPdf = async (optionIds: string[], signal: AbortSignal): Promise<Blob> => {
   const response = await fetch(`${API_URL}/options/preview-pdf`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ optionIds }),
+    signal,
   });
-  if (!response.ok) {
-    throw new Error('Erro ao baixar o PDF de preview');
-  }
-  const blob = await response.blob();
-  const url = window.URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  
-  const disposition = response.headers.get('content-disposition');
-  let filename = 'Preview.pdf';
-  if (disposition && disposition.includes('filename=')) {
-    filename = disposition.split('filename=')[1].replace(/"/g, '');
-  }
-  
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  window.URL.revokeObjectURL(url);
-  document.body.removeChild(a);
+  if (!response.ok) throw new Error('Não foi possível gerar a prévia em PDF.');
+  return response.blob();
 };
 
 export const verifyPassword = async (password: string, role: 'admin' | 'canticos') => {
@@ -174,11 +181,39 @@ export interface BirthdayPerson {
   responsavel?: string;
 }
 
-export const getBirthdays = async (): Promise<{ membros: BirthdayPerson[], dependentes: BirthdayPerson[] }> => {
+export interface WeddingAnniversary {
+  casal: string;
+  date: string;
+  anos: number;
+  bodas?: string;
+}
+
+export interface BirthdayCard {
+  name: string;
+  day: string;
+  month: string;
+  weekday: string;
+  gender?: 'M' | 'F';
+}
+
+export interface WeeklyAnniversaries {
+  membros: BirthdayPerson[];
+  dependentes: BirthdayPerson[];
+  casamentos: WeddingAnniversary[] | null;
+  slidesAniversariantes: { period: string; pages: BirthdayCard[][] } | null;
+}
+
+export const getBirthdays = async (): Promise<WeeklyAnniversaries> => {
   const response = await fetch(`${API_URL}/options/birthdays`);
   if (!response.ok) {
     throw new Error('Erro ao buscar aniversariantes');
   }
+  return response.json();
+};
+
+export const getPreaching = async (signal: AbortSignal): Promise<{ theme: string; title: string }> => {
+  const response = await fetch(`${API_URL}/options/preaching`, { signal });
+  if (!response.ok) throw new Error('Não foi possível consultar a aba Pregação.');
   return response.json();
 };
 
@@ -187,11 +222,15 @@ export interface Notice {
   title: string;
   filename: string;
   isRecurring: boolean;
+  expiresAfterPresentation?: boolean;
   isActive: boolean;
   order: number;
   duration: number;
   createdAt: string;
 }
+
+export const getNoticeImageUrl = (filename: string): string =>
+  /^https?:\/\//.test(filename) ? filename : `${API_URL.replace(/\/api\/?$/, '')}/avisos/${encodeURIComponent(filename)}`;
 
 export const getNotices = async (): Promise<Notice[]> => {
   const response = await fetch(`${API_URL}/notices`);
@@ -199,19 +238,24 @@ export const getNotices = async (): Promise<Notice[]> => {
   return response.json();
 };
 
+const noticeAdminHeaders = () => ({
+  'x-studio-password': sessionStorage.getItem('studio_password') || '',
+});
+
 export const createNotice = async (formData: FormData): Promise<Notice> => {
   const response = await fetch(`${API_URL}/notices`, {
     method: 'POST',
+    headers: noticeAdminHeaders(),
     body: formData,
   });
-  if (!response.ok) throw new Error('Erro ao criar aviso');
+  if (!response.ok) throw new Error('Não foi possível salvar o slide no Cloudinary.');
   return response.json();
 };
 
 export const updateNotice = async (id: string, updates: Partial<Notice>): Promise<Notice> => {
   const response = await fetch(`${API_URL}/notices/${id}`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { ...noticeAdminHeaders(), 'Content-Type': 'application/json' },
     body: JSON.stringify(updates),
   });
   if (!response.ok) throw new Error('Erro ao atualizar aviso');
@@ -219,16 +263,15 @@ export const updateNotice = async (id: string, updates: Partial<Notice>): Promis
 };
 
 export const deleteNotice = async (id: string): Promise<void> => {
-  const response = await fetch(`${API_URL}/notices/${id}`, { method: 'DELETE' });
+  const response = await fetch(`${API_URL}/notices/${id}`, { method: 'DELETE', headers: noticeAdminHeaders() });
   if (!response.ok) throw new Error('Erro ao deletar aviso');
 };
 
 export const generateNoticeVideo = async (): Promise<string> => {
-  const response = await fetch(`${API_URL}/notices/generate-video`, { method: 'POST' });
+  const response = await fetch(`${API_URL}/notices/generate-video`, { method: 'POST', headers: noticeAdminHeaders() });
   if (!response.ok) {
     const errorData = await response.json();
     throw new Error(errorData.message || 'Erro ao gerar vídeo');
   }
-  const data = await response.json();
-  return data.videoUrl;
+  return URL.createObjectURL(await response.blob());
 };

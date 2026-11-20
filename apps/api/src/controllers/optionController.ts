@@ -2,10 +2,12 @@ import { Request, Response } from 'express';
 import Option from '../models/Option';
 import fs from 'fs';
 import path from 'path';
+import { randomUUID } from 'crypto';
 import { sendPresentationEmail } from '../services/emailService';
-import { getBirthdaysForNextWeek } from '../services/googleSheets';
+import { getBirthdaysForNextWeek, getPreachingForNextSunday } from '../services/googleSheets';
 import { buildPresentationFiles } from '../services/presentationService';
-import { buildVideoBuffer } from './noticeController';
+import { logPresentationMemory, maxEmailAttachmentBytes, PresentationMediaError } from '../services/presentationMedia';
+import { buildVideoBuffer, getActiveNotices, removeUsedTemporaryNotices } from './noticeController';
 import { uploadImage, deleteFolder } from '../services/cloudinaryService';
 
 const tempDir = path.join(__dirname, '../../temp');
@@ -82,6 +84,15 @@ export const getBirthdaysList = async (req: Request, res: Response) => {
   }
 };
 
+export const getPreaching = async (_req: Request, res: Response) => {
+  try {
+    res.json(await getPreachingForNextSunday());
+  } catch (error) {
+    console.error('Erro ao buscar o cronograma de pregação:', error);
+    res.status(503).json({ message: 'Não foi possível consultar a aba Pregação.' });
+  }
+};
+
 export const createOption = async (req: Request, res: Response) => {
   try {
     const { title, category, slidesCount } = req.body;
@@ -118,96 +129,135 @@ export const createOption = async (req: Request, res: Response) => {
   }
 };
 
-export const generatePresentation = async (req: Request, res: Response) => {
-  try {
-    const providedPassword = req.headers['x-studio-password'];
-    if (providedPassword !== process.env.STUDIO_PASSWORD) {
-      return res.status(401).json({ message: 'Não autorizado. Senha inválida.' });
-    }
+interface PresentationJob {
+  status: 'generating' | 'success' | 'error';
+  message: string;
+}
 
-    let optionIdsRaw = req.body.optionIds;
-    let optionIds: string[];
+const presentationJobs = new Map<string, PresentationJob>();
+let presentationRunning = false;
 
-    // Tratamento para FormData (quando vier string do JSON.stringify)
-    if (typeof optionIdsRaw === 'string') {
-      try {
-        optionIds = JSON.parse(optionIdsRaw);
-      } catch {
-        optionIds = [];
-      }
-    } else {
-      optionIds = optionIdsRaw;
-    }
-
-    if (!optionIds || !Array.isArray(optionIds) || optionIds.length !== 7) {
-      return res.status(400).json({ message: 'É obrigatório selecionar exatamente 7 opções' });
-    }
-
-    const extraImages = req.files as Express.Multer.File[] | undefined;
-    const preachTheme = req.body.preachTheme || '';
-    const preachTitle = req.body.preachTitle || '';
-
-    // Responde imediatamente ao frontend para evitar timeout
-    res.status(200).json({
-      message: 'Apresentação está sendo gerada e será enviada para o e-mail em alguns minutos!',
-      status: 'success'
-    });
-
-    // Processamento pesado em segundo plano (Background)
-    setTimeout(async () => {
-      try {
-        console.log('Iniciando geração da apresentação em background...');
-        
-        // Passamos false para skipPptx e true para skipPdf (não precisamos do PDF no email)
-        const { pptxBuffer, fileNameBase } = await buildPresentationFiles(
-          optionIds,
-          extraImages,
-          preachTheme,
-          preachTitle,
-          false,
-          true
-        );
-
-        let videoBuffer: Buffer | null = null;
-        try {
-          videoBuffer = await buildVideoBuffer();
-        } catch (e) {
-          const err = e as Error;
-          console.error('Erro ao gerar vídeo dos avisos durante a apresentação:', err.message);
-        }
-
-        if (process.env.RESEND_API_KEY && process.env.DESTINATION_EMAIL) {
-          try {
-            const videoName = fileNameBase.replace('Culto-', 'Avisos-') + '.mp4';
-            await sendPresentationEmail(pptxBuffer, `${fileNameBase}.pptx`, videoBuffer, videoBuffer ? videoName : undefined);
-            console.log('Email enviado com sucesso em background!');
-          } catch (e) {
-            const err = e as Error;
-            console.error('Erro ao enviar e-mail em background:', err.message);
-          }
-        }
-
-      } catch (err) {
-        console.error('Erro crítico no processamento em background da apresentação:', err);
-      } finally {
-        // Limpar temps antigos e imagens extras após terminar
-        cleanupTempFiles();
-        if (extraImages && extraImages.length > 0) {
-          for (const file of extraImages) {
-            if (fs.existsSync(file.path)) {
-              fs.unlinkSync(file.path);
-            }
-          }
-        }
-        console.log('Limpeza de arquivos temporários concluída.');
-      }
-    }, 0);
-
-  } catch (e) {
-    const error = e as Error;
-    console.error(error);
-    res.status(500).json({ message: 'Erro ao iniciar geração', error: error.message });
+export const getPresentationStatus = (req: Request<{ jobId: string }>, res: Response) => {
+  if (!process.env.STUDIO_PASSWORD || req.headers['x-studio-password'] !== process.env.STUDIO_PASSWORD) {
+    return res.status(401).json({ message: 'Não autorizado. Senha inválida.' });
   }
+  const job = presentationJobs.get(req.params.jobId);
+  if (!job) return res.status(404).json({ message: 'O status da apresentação não está mais disponível.' });
+  return res.json(job);
+};
+
+export const generatePresentation = (req: Request, res: Response) => {
+  const files = req.files as Record<string, Express.Multer.File[]> | undefined;
+  const extraImages = files?.extraImages ?? [];
+  const temporaryNotices = files?.temporaryNotices ?? [];
+  const cleanupImages = async () => {
+    await Promise.allSettled(
+      [...extraImages, ...temporaryNotices].map(file => fs.promises.rm(file.path, { force: true }))
+    );
+  };
+  const rejectRequest = (status: number, message: string) => {
+    void cleanupImages();
+    return res.status(status).json({ message });
+  };
+
+  if (!process.env.STUDIO_PASSWORD || req.headers['x-studio-password'] !== process.env.STUDIO_PASSWORD) {
+    return rejectRequest(401, 'Não autorizado. Senha inválida.');
+  }
+
+  let optionIds: unknown = req.body.optionIds;
+  if (typeof optionIds === 'string') {
+    try {
+      optionIds = JSON.parse(optionIds);
+    } catch {
+      optionIds = null;
+    }
+  }
+  if (!Array.isArray(optionIds) || optionIds.length !== 7 || !optionIds.every(id => typeof id === 'string')) {
+    return rejectRequest(400, 'É obrigatório selecionar exatamente 7 opções.');
+  }
+
+  let requestedOrder: unknown;
+  try {
+    requestedOrder = req.body.noticeOrder === undefined ? undefined : JSON.parse(req.body.noticeOrder);
+  } catch {
+    return rejectRequest(400, 'Ordem dos avisos inválida.');
+  }
+  let noticeOrder: (string | number)[] | undefined;
+  if (requestedOrder !== undefined || temporaryNotices.length > 0) {
+    if (!Array.isArray(requestedOrder) || !requestedOrder.every(item =>
+      typeof item === 'string' ? /^[a-f0-9]{24}$/i.test(item) :
+        Number.isInteger(item) && item >= 0 && item < temporaryNotices.length
+    ) || new Set(requestedOrder).size !== requestedOrder.length ||
+      requestedOrder.filter(item => typeof item === 'number').length !== temporaryNotices.length) {
+      return rejectRequest(400, 'Ordem dos avisos inválida.');
+    }
+    noticeOrder = requestedOrder;
+  }
+
+  const duration = Number(req.body.noticeDuration ?? 10);
+  if (!Number.isInteger(duration) || duration < 1 || duration > 99) {
+    return rejectRequest(400, 'Informe uma duração entre 1 e 99 segundos para os avisos.');
+  }
+  if (!process.env.RESEND_API_KEY || !process.env.DESTINATION_EMAIL) {
+    return rejectRequest(503, 'O envio de apresentações por e-mail ainda não está configurado.');
+  }
+  if (presentationRunning) {
+    return rejectRequest(409, 'Já existe uma apresentação em processamento.');
+  }
+
+  const songIds: string[] = optionIds;
+  const preachTheme = req.body.preachTheme || '';
+  const preachTitle = req.body.preachTitle || '';
+  const jobId = randomUUID();
+  const job: PresentationJob = { status: 'generating', message: 'Montando os slides e gerando o vídeo de avisos.' };
+  presentationJobs.set(jobId, job);
+  presentationRunning = true;
+  res.status(202).json({ jobId, ...job });
+
+  void (async () => {
+    try {
+      logPresentationMemory('iniciando');
+      const activeNotices = await getActiveNotices();
+      const sharedNotices = new Map(activeNotices.map(notice => [String(notice._id), notice]));
+      const notices = noticeOrder?.map(item => {
+        if (typeof item === 'number') return { temporaryPath: temporaryNotices[item].path };
+        const notice = sharedNotices.get(item);
+        if (!notice) throw new Error('A lista compartilhada de avisos mudou durante a finalização.');
+        return notice;
+      }) ?? activeNotices;
+      const { casamentos, slidesAniversariantes } = await getBirthdaysForNextWeek();
+      if (casamentos === null || slidesAniversariantes === null) {
+        job.status = 'error';
+        job.message = 'Não foi possível consultar os aniversariantes ou as bodas. Tente gerar a apresentação novamente.';
+        return;
+      }
+      const { pptxBuffer, fileNameBase } = await buildPresentationFiles(
+        songIds, extraImages, preachTheme, preachTitle, false, true, casamentos, slidesAniversariantes
+      );
+      logPresentationMemory('PPTX pronto');
+      const videoBuffer = await buildVideoBuffer(notices, duration, maxEmailAttachmentBytes - pptxBuffer.length);
+      logPresentationMemory('enviando anexos');
+      const videoName = fileNameBase.replace('Culto-', 'Avisos-') + '.mp4';
+      const delivery = await sendPresentationEmail(pptxBuffer, `${fileNameBase}.pptx`, videoBuffer, videoBuffer ? videoName : undefined);
+      await removeUsedTemporaryNotices(notices.filter(notice => '_id' in notice));
+      job.status = 'success';
+      job.message = delivery === 'separate'
+        ? 'O PowerPoint e o vídeo de avisos foram enviados em dois e-mails.'
+        : 'A apresentação foi enviada para o e-mail da igreja.';
+      logPresentationMemory('finalizada');
+    } catch (error) {
+      console.error('Erro ao finalizar apresentação:', error);
+      job.status = 'error';
+      job.message = error instanceof PresentationMediaError
+        ? error.message
+        : 'Falha ao finalizar a apresentação. Os avisos temporários continuam disponíveis.';
+    } finally {
+      presentationRunning = false;
+      setTimeout(() => presentationJobs.delete(jobId), 30 * 60_000).unref();
+      await cleanupImages();
+      cleanupTempFiles();
+    }
+  })();
 };
 
 export const generatePreviewPdf = async (req: Request, res: Response) => {
@@ -222,7 +272,7 @@ export const generatePreviewPdf = async (req: Request, res: Response) => {
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
-    res.setHeader('Content-Disposition', `attachment; filename="${fileNameBase}.pdf"`);
+    res.setHeader('Content-Disposition', `inline; filename="${fileNameBase}.pdf"`);
     res.send(pdfBuffer);
   } catch (e) {
     const error = e as Error;

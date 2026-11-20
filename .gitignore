@@ -4,5 +4,6 @@ dist/
 *.log
 *.csv
 *.pdf
+!/apps/web/public/LOUVORES_DA_CAPITAL.pdf
 *.pptx
 .DS_Store
